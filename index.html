@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="En">
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0 minimum-scale=1.0"/>
+    <title>Document</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="./assets/css/global.css">
+    <link rel="stylesheet" href="./assets/css/map.css">
+    <link rel="stylesheet" href="./assets/css/penetration.css">
+
+
+
+    <!--
+           <style>
+            body {
+                background: rgb(204, 204, 204);
+            }
+
+            page[size="A4"] {
+                background: white;
+                width: 21cm;
+                height: 29.7cm;
+                display: block;
+                margin: 0 auto;
+                margin-bottom: 0.5cm;
+                box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.5);
+            }
+
+            .a4 {
+                background: white;
+                width: 21cm;
+                height: 29.7cm;
+                display: block;
+                margin: 0 auto;
+                margin-bottom: 0.5cm;
+            }
+
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            @media print {
+                .page {
+                    margin: 0;
+                    border: initial;
+                    border-radius: initial;
+                    width: initial;
+                    min-height: initial;
+                    box-shadow: initial;
+                    background: initial;
+                    page-break-after: always;
+                }
+            }
+        </style>
+    -->
+</head>
+
+
+
+<body>
+<div class="body">
+    <div class="wrapper_left">
+        <!--<form>-->
+        <div class="side_sh">
+            <!--<input type="text" name="" value="" id="" class="map_search" title="map search" maxlength="30" onchange="SaveData(this)" />-->
+            <input type="text" name="" value="" id="map_search" class="map_search" title="map search" maxlength="30" onkeyup="gettext(this)" />
+            <button id="sh_submit" class="sh_btn">search</button>
+        </div>
+        <!--</form>-->
+        <button id="print_btn" class="print_btn project_list" onclick="printpage()" type="button" value="print" tabindex="-1">Page print</button>
+        <!--<button class="project_list" onclick="loadProjects()">load list</button>-->
+
+        <div class="side">
+            <ul class="sh_list">
+                <!--<li class="sub1 sh_main_item">-->
+                <!--<a href="#" class="first_step">${item.field_2}</a>-->
+                <!--<ul>-->
+                <!--<li><a href="#" tabindex="-1">1111111</a></li>-->
+                <!--<li><a href="#" tabindex="-1">2222222</a></li>-->
+                <!--<li><a href="#" tabindex="-1">3333333</a></li>-->
+
+                <!--</ul>-->
+                <!--</li>-->
+
+            </ul>
+        </div>
+    </div>
+
+    <div class="wrapper_right" id="print_area">
+        <!--<div class="header">-->
+        <!--<div class="header_list">-->
+        <!--<div class="sub_logo">-->
+        <!--<h2>passafe fire projection</h2>-->
+        <!--</div>-->
+
+        <!--<ul class="hd_li">-->
+        <!--<li>-->
+        <!--<span>Site</span>-->
+        <!--<p>Lincold rd</p>-->
+        <!--</li>-->
+        <!--<li>-->
+        <!--<span>Completed by</span>-->
+        <!--<p>Phoenix Hunapo</p>-->
+        <!--</li>-->
+        <!--<li>-->
+        <!--<span>Client</span>-->
+        <!--<p>Rucon Construction</p>-->
+        <!--</li>-->
+        <!--<li>-->
+        <!--<span>Date</span>-->
+        <!--<p>30/05/18</p>-->
+        <!--</li>-->
+        <!--</ul>-->
+
+        <!--</div>-->
+        <!--<p>Proud members</p>-->
+
+
+        <!--</div>-->
+        <!---->
+        <!--<div class="main">-->
+        <!--<div class="list_item">-->
+        <!--<ul class="board_box">-->
+        <!--<li class="board_title">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Penetration Number</span>-->
+        <!--<span class="co">Level</span>-->
+        <!--<span class="co">Room</span>-->
+        <!--<span class="co">Penetration</span>-->
+        <!--<span class="co">Type(mm)</span>-->
+        <!--<span class="co">System used</span>-->
+        <!--<span class="co">FRR(-/-/-)</span>-->
+
+        <!--</div>-->
+
+        <!--</li>-->
+        <!--<li class="board_list line_1">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">L1-G2/G9-GD-6</span>-->
+        <!--<span class="co">1</span>-->
+        <!--<span class="co">HallwayHallwayHallwayHallway</span>-->
+        <!--<span class="co"><b>19000000mm</b>x<b>75mm</b><b>Steel Purlin</b></span>-->
+        <!--<span class="co">Double layer 130000000000000000000000000000mm</span>-->
+        <!--<span class="co">0.09m2 Intubat</span>-->
+        <!--<span class="co">-/60/60</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_2">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Degree og difficulty</span>-->
+        <!--<span class="co">2</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_3">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Comments</span>-->
+        <!--<span class="co">Difficult access and confined space</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--</ul>-->
+
+        <!--<ul class="pic_box">-->
+        <!--<li class="before">-->
+        <!--<a href="#"><img src="./assets/img/pic_before.png" alt="before" />before</a>-->
+
+        <!--</li>-->
+        <!--<li class="after">-->
+        <!--<a href="#"><img src="./assets/img/pic_after.png" alt="after" />after</a>-->
+        <!--</li>-->
+
+        <!--</ul>-->
+
+        <!--</div>-->
+        <!--<div class="list_item">-->
+        <!--<ul class="board_box">-->
+        <!--<li class="board_title">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Penetration Number</span>-->
+        <!--<span class="co">Level</span>-->
+        <!--<span class="co">Room</span>-->
+        <!--<span class="co">Penetration</span>-->
+        <!--<span class="co">Type(mm)</span>-->
+        <!--<span class="co">System used</span>-->
+        <!--<span class="co">FRR(-/-/-)</span>-->
+
+        <!--</div>-->
+
+        <!--</li>-->
+        <!--<li class="board_list line_1">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">L1-G2/G9-GD-6</span>-->
+        <!--<span class="co">1</span>-->
+        <!--<span class="co">Hallway</span>-->
+        <!--<span class="co"><b>190mm</b>x<b>75mm</b><b>Steel Purlin</b></span>-->
+        <!--<span class="co">Double layer 13mm</span>-->
+        <!--<span class="co">0.09m2 Intubat</span>-->
+        <!--<span class="co">-/60/60</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_2">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Degree og difficulty</span>-->
+        <!--<span class="co">2</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_3">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Comments</span>-->
+        <!--<span class="co">Difficult access and confined space</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--</ul>-->
+
+        <!--<ul class="pic_box">-->
+        <!--<li class="before">-->
+        <!--<a href="#"><img src="./assets/img/pic_before.png" alt="before" />before</a>-->
+
+        <!--</li>-->
+        <!--<li class="after">-->
+        <!--<a href="#"><img src="./assets/img/pic_after.png" alt="after" />after</a>-->
+        <!--</li>-->
+
+        <!--</ul>-->
+
+        <!--</div>-->
+
+        <!--<div class="list_item">-->
+        <!--<ul class="board_box">-->
+        <!--<li class="board_title">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Penetration Number</span>-->
+        <!--<span class="co">Level</span>-->
+        <!--<span class="co">Room</span>-->
+        <!--<span class="co">Penetration</span>-->
+        <!--<span class="co">Type(mm)</span>-->
+        <!--<span class="co">System used</span>-->
+        <!--<span class="co">FRR(-/-/-)</span>-->
+
+        <!--</div>-->
+
+        <!--</li>-->
+        <!--<li class="board_list line_1">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">L1-G2/G9-GD-6</span>-->
+        <!--<span class="co">1</span>-->
+        <!--<span class="co">Hallway</span>-->
+        <!--<span class="co"><b>190mm</b>x<b>75mm</b><b>Steel Purlin</b></span>-->
+        <!--<span class="co">Double layer 13mm</span>-->
+        <!--<span class="co">0.09m2 Intubat</span>-->
+        <!--<span class="co">-/60/60</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_2">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Degree og difficulty</span>-->
+        <!--<span class="co">2</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_3">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Comments</span>-->
+        <!--<span class="co">Difficult access and confined space</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--</ul>-->
+
+        <!--<ul class="pic_box">-->
+        <!--<li class="before">-->
+        <!--<a href="#"><img src="./assets/img/pic_before.png" alt="before" />before</a>-->
+
+        <!--</li>-->
+        <!--<li class="after">-->
+        <!--<a href="#"><img src="./assets/img/pic_after.png" alt="after" />after</a>-->
+        <!--</li>-->
+
+        <!--</ul>-->
+
+        <!--</div>-->
+
+        <!--<div class="list_item">-->
+        <!--<ul class="board_box">-->
+        <!--<li class="board_title">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Penetration Number</span>-->
+        <!--<span class="co">Level</span>-->
+        <!--<span class="co">Room</span>-->
+        <!--<span class="co">Penetration</span>-->
+        <!--<span class="co">Type(mm)</span>-->
+        <!--<span class="co">System used</span>-->
+        <!--<span class="co">FRR(-/-/-)</span>-->
+
+        <!--</div>-->
+
+        <!--</li>-->
+        <!--<li class="board_list line_1">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">L1-G2/G9-GD-6</span>-->
+        <!--<span class="co">1</span>-->
+        <!--<span class="co">Hallway</span>-->
+        <!--<span class="co"><b>190mm</b>x<b>75mm</b><b>Steel Purlin</b></span>-->
+        <!--<span class="co">Double layer 13mm</span>-->
+        <!--<span class="co">0.09m2 Intubat</span>-->
+        <!--<span class="co">-/60/60</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_2">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Degree og difficulty</span>-->
+        <!--<span class="co">2</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--<li class="board_list line_3">-->
+        <!--<div class="ro">-->
+        <!--<span class="co">Comments</span>-->
+        <!--<span class="co">Difficult access and confined space</span>-->
+        <!--</div>-->
+        <!--</li>-->
+        <!--<li class="empty_line"></li>-->
+        <!--</ul>-->
+
+        <!--<ul class="pic_box">-->
+        <!--<li class="before">-->
+        <!--<a href="#"><img src="./assets/img/pic_before.png" alt="before" />before</a>-->
+
+        <!--</li>-->
+        <!--<li class="after">-->
+        <!--<a href="#"><img src="./assets/img/pic_after.png" alt="after" />after</a>-->
+        <!--</li>-->
+
+        <!--</ul>-->
+
+        <!--</div>-->
+
+        <!--</div>-->
+        <!--<footer>-->
+
+        <!--</footer>-->
+        <!--</div>-->
+    </div>
+
+    <script>
+
+        'use strict';
+
+
+
+    </script>
+</body>
+
+<script type="text/javascript" src="./assets/js/lib/jquery-3.3.1.min.js"></script>
+<script type="text/javascript" src="./assets/js/lib/jquery-ui.min.js"></script>
+<script type="text/javascript" src="./assets/js/lib/jquery.register_form.js"></script>
+<script type="text/javascript" src="./assets/js/lib/bluebird.min.js"></script>
+<script type="text/javascript" src="./assets/js/lib/jspdf.min.js"></script>
+<script type="text/javascript" src="./assets/js/lib/html2canvas.min.js"></script>
+<script type="text/javascript" src="./assets/js/penetration.js"></script>
+
+</html>

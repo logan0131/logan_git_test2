@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0 minimum-scale=1.0"/>
+    <title>라이프매니저</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css"
+          integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB"
+          crossorigin="anonymous">
+    <style>
+        body {
+            background: #f5f6fa;
+        }
+
+        .lm_header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .lm_container {
+            max-width: 720px;
+            margin: 24px auto;
+            padding: 0 16px;
+        }
+
+        .lm_card {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .lm_todo_item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .lm_todo_item.done .lm_todo_text {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .lm_todo_text {
+            flex: 1;
+        }
+    </style>
+</head>
+
+<body>
+<div class="lm_header">
+    <h4 class="mb-0">라이프매니저</h4>
+    <a href="./index.html" class="btn btn-outline-secondary btn-sm">지도 검색으로 돌아가기</a>
+</div>
+
+<div class="lm_container">
+    <div class="lm_card">
+        <h5>오늘의 할 일</h5>
+        <form id="todo_form" class="form-inline mb-3">
+            <input type="text" id="todo_input" class="form-control mr-2" style="flex:1"
+                   placeholder="할 일을 입력하세요" maxlength="100"/>
+            <button type="submit" class="btn btn-primary">추가</button>
+        </form>
+        <ul id="todo_list" class="list-unstyled mb-0"></ul>
+    </div>
+
+    <div class="lm_card">
+        <h5>일정 메모</h5>
+        <textarea id="schedule_memo" class="form-control" rows="5"
+                  placeholder="일정을 자유롭게 메모하세요"></textarea>
+        <small class="text-muted">내용은 브라우저에 자동 저장됩니다.</small>
+    </div>
+</div>
+
+<script>
+    var TODO_KEY = 'lifemanager_todos';
+    var MEMO_KEY = 'lifemanager_memo';
+
+    function loadTodos() {
+        try {
+            return JSON.parse(localStorage.getItem(TODO_KEY)) || [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveTodos(todos) {
+        localStorage.setItem(TODO_KEY, JSON.stringify(todos));
+    }
+
+    function renderTodos() {
+        var todos = loadTodos();
+        var list = document.getElementById('todo_list');
+        list.innerHTML = '';
+        todos.forEach(function (todo, i) {
+            var li = document.createElement('li');
+            li.className = 'lm_todo_item' + (todo.done ? ' done' : '');
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = todo.done;
+            checkbox.addEventListener('change', function () {
+                todos[i].done = checkbox.checked;
+                saveTodos(todos);
+                renderTodos();
+            });
+
+            var span = document.createElement('span');
+            span.className = 'lm_todo_text';
+            span.textContent = todo.text;
+
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-outline-danger';
+            removeBtn.textContent = '삭제';
+            removeBtn.addEventListener('click', function () {
+                todos.splice(i, 1);
+                saveTodos(todos);
+                renderTodos();
+            });
+
+            li.appendChild(checkbox);
+            li.appendChild(span);
+            li.appendChild(removeBtn);
+            list.appendChild(li);
+        });
+    }
+
+    document.getElementById('todo_form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = document.getElementById('todo_input');
+        var text = input.value.trim();
+        if (!text) return;
+        var todos = loadTodos();
+        todos.push({text: text, done: false});
+        saveTodos(todos);
+        input.value = '';
+        renderTodos();
+    });
+
+    var memo = document.getElementById('schedule_memo');
+    memo.value = localStorage.getItem(MEMO_KEY) || '';
+    memo.addEventListener('input', function () {
+        localStorage.setItem(MEMO_KEY, memo.value);
+    });
+
+    renderTodos();
+</script>
+</body>
+
+</html>

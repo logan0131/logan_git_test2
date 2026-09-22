@@ -27,15 +27,21 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+# Pull the latest version when this folder is a git checkout (harmless if offline).
+if [ -d .git ] && command -v git >/dev/null 2>&1; then
+  echo "최신 버전 확인 중… / checking for updates…"
+  git pull --ff-only 2>/dev/null || echo "(업데이트를 건너뜁니다 / update skipped)"
+fi
+
 if [ ! -d node_modules ]; then
   echo
   echo "처음 실행입니다. 필요한 패키지를 설치합니다 (1~2분)… / First run: installing packages (1–2 min)…"
-  npm install || {
-    echo "설치에 실패했습니다 / install failed"
-    read -n 1 -s -r -p "아무 키나 누르면 닫힙니다 / press any key to close"
-    exit 1
-  }
 fi
+npm install --no-audit --no-fund || {
+  echo "설치에 실패했습니다 / install failed"
+  read -n 1 -s -r -p "아무 키나 누르면 닫힙니다 / press any key to close"
+  exit 1
+}
 
 echo
 echo "앱을 켭니다. 브라우저가 자동으로 열립니다 (안 열리면 http://localhost:5173/ 로 접속)."

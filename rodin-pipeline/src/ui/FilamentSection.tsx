@@ -68,11 +68,32 @@ export function FilamentSection({
     [nextNames[a], nextNames[b]] = [nextNames[b], nextNames[a]];
     update({ hex: nextHex, names: nextNames });
   };
-  const slotOfEntry = (entry: FilamentListEntry): number => {
+  /** 1-based slot currently holding this list entry (matched by colour), 0 when none. */
+  const slotOfEntry = (entry: FilamentListEntry, hexes: string[] = settings.hex): number => {
     for (let i = 0; i < settings.count; i++) {
-      if (settings.hex[i]?.toUpperCase() === entry.hex.toUpperCase() && settings.names[i] === entry.name) return i + 1;
+      if (hexes[i]?.toUpperCase() === entry.hex.toUpperCase()) return i + 1;
     }
     return 0;
+  };
+  /**
+   * Put a list entry into a slot. If the entry already sits in another slot the
+   * two slots swap contents, so a filament never ends up in two slots at once.
+   */
+  const moveEntryToSlot = (hexes: string[], names: string[], entry: FilamentListEntry, target: number): void => {
+    const current = slotOfEntry(entry, hexes) - 1;
+    if (current === target) return;
+    if (current >= 0) {
+      hexes[current] = hexes[target];
+      names[current] = names[target];
+    }
+    hexes[target] = entry.hex.toUpperCase();
+    names[target] = entry.name;
+  };
+  const assignEntryToSlot = (entry: FilamentListEntry, target: number) => {
+    const nextHex = [...settings.hex];
+    const nextNames = [...settings.names];
+    moveEntryToSlot(nextHex, nextNames, entry, target);
+    update({ hex: nextHex, names: nextNames });
   };
   const fillFromPalette = () => {
     if (palette.length === 0) return;
@@ -96,11 +117,8 @@ export function FilamentSection({
       const nextHex = [...settings.hex];
       const nextNames = [...settings.names];
       let count = settings.count;
-      for (const { slot, entry } of assignments) {
-        nextHex[slot - 1] = entry.hex;
-        nextNames[slot - 1] = entry.name;
-        if (slot > count) count = slot;
-      }
+      for (const { slot } of assignments) if (slot > count) count = slot;
+      for (const { slot, entry } of assignments) moveEntryToSlot(nextHex, nextNames, entry, slot - 1);
       update({ hex: nextHex, names: nextNames, count });
     }
     setPasted("");
@@ -173,7 +191,7 @@ export function FilamentSection({
             moveDownLabel={t("fil.moveDown")}
             onHex={(hex) => setSlot(i, hex)}
             onName={(name) => setSlot(i, settings.hex[i], name)}
-            onPick={(entry) => setSlot(i, entry.hex, entry.name)}
+            onPick={(entry) => assignEntryToSlot(entry, i)}
             onMove={(delta) => swapSlots(i, i + delta)}
           />
         ))}
@@ -224,7 +242,7 @@ export function FilamentSection({
                               value={slot || ""}
                               onChange={(e) => {
                                 const target = Number(e.target.value);
-                                if (target >= 1) setSlot(target - 1, entry.hex, entry.name);
+                                if (target >= 1) assignEntryToSlot(entry, target - 1);
                               }}
                             >
                               <option value="">{t("fil.unassigned")}</option>

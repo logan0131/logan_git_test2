@@ -51,9 +51,10 @@ import { MergeSection, type MergeReportData } from "./ui/MergeSection";
 import { MixSection, type PhysicalDirectSuggestion } from "./ui/MixSection";
 import { ExportSection, type ExportCheck } from "./ui/ExportSection";
 import { Swatch, pct } from "./ui/common";
+import { ColourSelect } from "./ui/ColourSelect";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -914,18 +915,18 @@ export default function App() {
                   </span>
                   <span className="muted">{t("pick.faces", { n: picked.faces.length.toLocaleString(), pct: pct(picked.fraction) })}</span>
                   <span>{t("pick.changeTo")}</span>
-                  <select value={pickTarget} onChange={(e) => setPickTarget(e.target.value)}>
-                    <option value="">…</option>
-                    {palette.map((entry) => {
-                      const hex = rgbToHex(entry.rgb);
-                      return (
-                        <option key={entry.index} value={hex} disabled={hex === picked.hex}>
-                          #{entry.index} {hex}
-                        </option>
-                      );
-                    })}
-                    <option value="__new__">{t("pick.newColour")}</option>
-                  </select>
+                  <ColourSelect
+                    value={pickTarget}
+                    placeholder="…"
+                    onChange={setPickTarget}
+                    options={[
+                      ...palette.map((entry, position) => {
+                        const hex = rgbToHex(entry.rgb);
+                        return { value: hex, hex, label: `#${entry.index} ${hex}`, sub: pct(areaByPosition[position] ?? 0), disabled: hex === picked.hex };
+                      }),
+                      { value: "__new__", hex: pickCustom, label: t("pick.newColour") },
+                    ]}
+                  />
                   {pickTarget === "__new__" && <input type="color" value={pickCustom} onChange={(e) => setPickCustom(e.target.value.toUpperCase())} />}
                   <button
                     type="button"

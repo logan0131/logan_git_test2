@@ -6,6 +6,7 @@ import { FILAMENT_PRESETS, MAX_PHYSICAL, MIN_PHYSICAL, type FilamentListEntry, t
 import { hexToRgb } from "../engine/mesh";
 import { useT, type Key } from "../i18n";
 import { Row, Section } from "./common";
+import { ColourSelect } from "./ColourSelect";
 
 function toFilament(entry: FilamentListEntry): Filament {
   const rgb = hexToRgb(entry.hex);
@@ -216,22 +217,18 @@ function FilamentRow({
         }}
         style={{ fontFamily: "monospace" }}
       />
-      <select
+      <ColourSelect
         value=""
         disabled={list.length === 0}
-        onChange={(e) => {
-          const entry = list[Number(e.target.value)];
+        placeholder={listLabel}
+        title={listLabel}
+        filterable
+        onChange={(next) => {
+          const entry = list[Number(next)];
           if (entry) onPick(entry);
         }}
-        title={listLabel}
-      >
-        <option value="">{listLabel}</option>
-        {list.map((entry, i) => (
-          <option key={`${entry.name}-${i}`} value={i}>
-            {entry.name} {entry.hex}
-          </option>
-        ))}
-      </select>
+        options={list.map((entry, i) => ({ value: String(i), hex: entry.hex, label: entry.name, sub: `${entry.type ? `${entry.type} · ` : ""}${entry.hex}` }))}
+      />
     </>
   );
 }

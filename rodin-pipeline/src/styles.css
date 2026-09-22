@@ -137,3 +137,22 @@ table.grid tr.row-selected.hover-row td { background: rgba(255, 216, 79, 0.2); }
 .pick-panel { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); background: rgba(255, 138, 61, 0.10); font-size: 0.86rem; }
 .pick-panel .muted { font-size: 0.82rem; }
 .legend .legend-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+
+/* colour select (swatch drop-down) */
+.colour-select-trigger { display: inline-flex; align-items: center; gap: 6px; min-width: 120px; max-width: 100%; background: #0f141a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; cursor: pointer; font: inherit; text-align: left; }
+.colour-select-trigger:hover { border-color: var(--accent-2); }
+.colour-select-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
+.colour-select-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.86rem; }
+.colour-select-chevron { color: var(--muted); font-size: 0.8rem; }
+.swatch.neutral { background: repeating-linear-gradient(45deg, #3a4552 0 4px, #2b3138 4px 8px); }
+.colour-select-popover { position: fixed; z-index: 1000; background: #1a2129; border: 1px solid #3a4552; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); padding: 6px; display: grid; gap: 4px; }
+.colour-select-filter { width: 100%; }
+.colour-select-list { max-height: 320px; overflow-y: auto; display: grid; gap: 2px; }
+.colour-option { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; color: var(--text); border: 0; border-radius: 6px; padding: 5px 6px; cursor: pointer; font: inherit; text-align: left; }
+.colour-option:hover { background: rgba(99, 179, 255, 0.14); }
+.colour-option.active { background: rgba(59, 142, 230, 0.28); }
+.colour-option:disabled { opacity: 0.4; cursor: not-allowed; }
+.colour-option-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.86rem; }
+.colour-option-sub { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+.colour-option-empty { padding: 6px; }
+table.grid td .colour-select-trigger { min-width: 150px; }

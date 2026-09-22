@@ -4,6 +4,7 @@ import type { VirtualBlendEntry, VirtualExtruderPlan } from "@core/virtualExtrud
 import type { MixSettings } from "../engine/types";
 import { useT } from "../i18n";
 import { NumberField, Row, Section, Swatch } from "./common";
+import { ColourSelect } from "./ColourSelect";
 
 export interface PhysicalDirectSuggestion {
   extruder: number;
@@ -207,14 +208,15 @@ export function MixSection({
                         </td>
                         <td>{suggestion ? <span className="badge">→ E{suggestion.extruder} (ΔE {suggestion.deltaE.toFixed(1)})</span> : <span className="muted">-</span>}</td>
                         <td>
-                          <select value={manual ?? ""} onChange={(e) => onManualPhysical(entry.index, e.target.value ? Number(e.target.value) : null)}>
-                            <option value="">{suggestion && settings.autoPhysicalDirect ? t("mix.autoWith", { n: suggestion.extruder }) : t("mix.autoVirtual")}</option>
-                            {slots.map((slot) => (
-                              <option key={slot.slot} value={slot.slot}>
-                                E{slot.slot} {rgbToHex(slot.filament.rgb)}
-                              </option>
-                            ))}
-                          </select>
+                          <ColourSelect
+                            value={manual !== undefined ? String(manual) : ""}
+                            placeholder={suggestion && settings.autoPhysicalDirect ? t("mix.autoWith", { n: suggestion.extruder }) : t("mix.autoVirtual")}
+                            onChange={(next) => onManualPhysical(entry.index, next ? Number(next) : null)}
+                            options={[
+                              { value: "", label: suggestion && settings.autoPhysicalDirect ? t("mix.autoWith", { n: suggestion.extruder }) : t("mix.autoVirtual") },
+                              ...slots.map((slot) => ({ value: String(slot.slot), hex: rgbToHex(slot.filament.rgb), label: `E${slot.slot} ${slot.filament.name}`, sub: rgbToHex(slot.filament.rgb) })),
+                            ]}
+                          />
                         </td>
                       </tr>
                     );

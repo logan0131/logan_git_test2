@@ -5,6 +5,7 @@ import type { MergeReprojectionStats } from "@core/mergeReprojection";
 import type { MergeFlag, MergeSettings } from "../engine/types";
 import { useT } from "../i18n";
 import { NumberField, Row, Section, Swatch, pct } from "./common";
+import { ColourSelect } from "./ColourSelect";
 
 export interface MergeReportRowData {
   label: string;
@@ -136,16 +137,23 @@ export function MergeSection({
                     </td>
                     <td>{pct(areaByPosition[position] ?? 0)}</td>
                     <td>
-                      <select value={target} disabled={busy} onChange={(e) => onFlagChange(hex, { target: e.target.value || null })}>
-                        <option value="">{t("merge.keep")}</option>
-                        {palette
-                          .filter((other) => other.index !== entry.index)
-                          .map((other) => (
-                            <option key={other.index} value={rgbToHex(other.rgb)}>
-                              → #{other.index} {rgbToHex(other.rgb)}
-                            </option>
-                          ))}
-                      </select>
+                      <ColourSelect
+                        value={target}
+                        disabled={busy}
+                        placeholder={t("merge.keep")}
+                        onChange={(next) => onFlagChange(hex, { target: next || null })}
+                        options={[
+                          { value: "", label: t("merge.keep") },
+                          ...palette
+                            .filter((other) => other.index !== entry.index)
+                            .map((other) => ({
+                              value: rgbToHex(other.rgb),
+                              hex: rgbToHex(other.rgb),
+                              label: `→ #${other.index} ${rgbToHex(other.rgb)}`,
+                              sub: pct(areaByPosition[palette.indexOf(other)] ?? 0),
+                            })),
+                        ]}
+                      />
                     </td>
                     <td>
                       <Switch checked={flag.ambiguous} disabled={busy} onChange={(v) => onFlagChange(hex, { ambiguous: v })} title={t("merge.ambiguousTip")} />
@@ -166,16 +174,16 @@ export function MergeSection({
       {selectedInPalette.length > 0 && (
         <div className="selection-bar">
           <span>{t("merge.selectedBar", { n: selectedInPalette.length })}</span>
-          <select value={mergeTarget} disabled={busy} onChange={(e) => setMergeTarget(e.target.value)}>
-            {selectedInPalette.map((hex) => {
+          <ColourSelect
+            value={mergeTarget}
+            disabled={busy}
+            placeholder="…"
+            onChange={setMergeTarget}
+            options={selectedInPalette.map((hex) => {
               const entry = entryByHex.get(hex);
-              return (
-                <option key={hex} value={hex}>
-                  #{entry?.index ?? "?"} {hex}
-                </option>
-              );
+              return { value: hex, hex, label: `#${entry?.index ?? "?"} ${hex}`, sub: entry ? pct(areaByPosition[palette.indexOf(entry)] ?? 0) : undefined };
             })}
-          </select>
+          />
           <button type="button" className="btn primary small" disabled={busy || selectedInPalette.length < 2 || !mergeTarget} onClick={() => onMergeSelected(mergeTarget)}>
             {t("merge.runSelected")}
           </button>

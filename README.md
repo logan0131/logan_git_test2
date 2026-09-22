@@ -48,6 +48,12 @@ npx vite preview -w rodin-pipeline   # 빌드 결과 미리보기 / serve the bu
 
 The app autosaves the loaded model file and the current face colours (merges, patch recolours) in the browser's IndexedDB and restores them on the next start; the status bar shows "autosaved HH:MM" once stored. After a restore, **Undo** returns to the original colours; **Start over** in the Load section clears the model and the saved work (filament and merge settings stay). The PrusaSlicer template 3MF is remembered the same way, and the "PrusaSlicer template: name · bed" line in the Load section shows which one is attached. Storage is per browser and per address (port).
 
+### 색지도와 브러시 / Colour map and brush
+
+미리보기 도구줄의 **색지도**를 켜면 모델 면을 2D로 펼친 지도가 옆에 나옵니다(자동 펼침, 축별 조각 배치). 3D에서 고른 조각이 지도에도 같은 색 윤곽으로 보이고, 지도에서 클릭·더블클릭·Shift+클릭으로 고른 것도 3D에 바로 반영됩니다. **브러시**를 켜면 3D와 지도 모두에서 왼쪽 드래그로 칠할 수 있고(3D 회전은 오른쪽 드래그), 한쪽의 브러시 원이 다른 쪽에도 보입니다. 기본은 "선택한 조각 안에서만"이라 선택 밖은 칠해지지 않으며, 드래그 한 번이 되돌리기 한 단계(Ctrl+Z)입니다.
+
+**Colour map** in the preview toolbar shows the faces unwrapped into 2D (automatic per-axis charts). Patches picked in 3D are outlined on the map and picks on the map (click, double-click, Shift+click) apply to 3D. **Brush** paints with a left-drag in both the 3D view and the map (rotate 3D with the right button); the brush circle of one view is mirrored in the other. "Only inside the selected patches" is on by default so nothing outside the selection is painted, and each drag is one undo step (Ctrl+Z).
+
 ### 색 수 한계 / Colour limit
 
 내보내기는 실물 + 가상 익스트루더 합계 **255**까지 받습니다. 작업지시서의 15는 PrusaSlicer 2.9.5 이하의 6비트 칠하기 상태(최대 15) 기준이었고, ColorMix가 들어간 PrusaSlicer 2.9.6부터는 삼각형 상태가 256개(17번 이상은 14비트 코드, `slic3rpe:MmPaintingVersion` 2)라서 XL 5T 기준 실물 5 + 가상 250까지 가능합니다. 가상 색이 많을수록 슬라이싱과 출력 시간이 늘어나니 필요한 만큼만 쓰세요. 16색 이하 파일은 2.9.6 이전 버전도 읽지만, 이 앱의 파일은 항상 2.9.6 이상용입니다.

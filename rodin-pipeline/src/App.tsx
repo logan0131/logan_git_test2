@@ -34,8 +34,11 @@ import {
   buildPositions,
   colourKey,
   countUniqueColours,
+  faceGeometry,
+  facesInSphere,
   hexToRgb,
   highlightGeometry,
+  type FaceGeometry,
   maskFromLabels,
   paletteLabels,
   representativeColoursByPosition,
@@ -61,19 +64,21 @@ import {
   type StoredWorkColours,
   type StoredWorkFile,
 } from "./engine/storage";
-import { MeshViewer, type HighlightOverlay, type PickInfo } from "./ui/MeshViewer";
+import { MeshViewer, type HighlightOverlay, type MeshViewerHandle, type PickInfo, type ViewerHit } from "./ui/MeshViewer";
+import { ColourMap, type ColourMapHandle } from "./ui/ColourMap";
+import { buildFaceAtlas, faceAtlasCentre, type AtlasMasks, type FaceAtlas } from "./engine/atlas";
 import { HelpTip } from "./ui/HelpTip";
 import { LoadSection, type SourceInfo } from "./ui/LoadSection";
 import { FilamentSection } from "./ui/FilamentSection";
 import { MergeSection, type MergeReportData } from "./ui/MergeSection";
 import { MixSection, type PhysicalDirectSuggestion } from "./ui/MixSection";
 import { ExportSection, type ExportCheck } from "./ui/ExportSection";
-import { Swatch, pct } from "./ui/common";
+import { NumberField, Swatch, pct } from "./ui/common";
 import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.3.4";
+const APP_VERSION = "0.4.0";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -125,6 +130,35 @@ export default function App() {
   const [nomadReport, setNomadReport] = useState<{ message: string; warnings: string[] } | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("palette");
   const [split, setSplit] = useState(true);
+  const [showMap, setShowMapState] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("rodin-pipeline-map") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setShowMap = (next: boolean) => {
+    setShowMapState(next);
+    try {
+      window.localStorage.setItem("rodin-pipeline-map", next ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  };
+  const [atlas, setAtlas] = useState<FaceAtlas | null>(null);
+  const [atlasBuilding, setAtlasBuilding] = useState(false);
+  const atlasRef = useRef<{ triangles: MeshModel["triangles"]; atlas: FaceAtlas } | null>(null);
+  const faceGeometryRef = useRef<{ triangles: MeshModel["triangles"]; geometry: FaceGeometry } | null>(null);
+  const [brushMode, setBrushMode] = useState(false);
+  const [brushRadius, setBrushRadius] = useState(1);
+  const [brushMaskOnly, setBrushMaskOnly] = useState(true);
+  const [coloursVersion, setColoursVersion] = useState(0);
+  const strokeRef = useRef<{ working: RGB[]; mask: Uint8Array | null; count: number; rgb: RGB; hex: string } | null>(null);
+  const viewerRef0 = useRef<MeshViewerHandle>(null);
+  const viewerRef1 = useRef<MeshViewerHandle>(null);
+  const viewerRef2 = useRef<MeshViewerHandle>(null);
+  const viewerRefs = [viewerRef0, viewerRef1, viewerRef2];
+  const mapRef = useRef<ColourMapHandle | null>(null);
   const [flat, setFlatState] = useState<boolean>(() => {
     try {
       return window.localStorage.getItem("rodin-pipeline-flat") === "1";
@@ -166,6 +200,8 @@ export default function App() {
   const [splitterDragging, setSplitterDragging] = useState(false);
   const adjacencyRef = useRef<{ triangles: MeshModel["triangles"]; adjacency: FaceAdjacency } | null>(null);
   const modelFileRef = useRef<WorkSource | null>(null);
+  const modelRef = useRef<MeshModel | null>(null);
+  modelRef.current = model;
   /** Face colours right after parsing the file (the "original" the undo stack bottoms out at). */
   const originalColoursRef = useRef<RGB[] | null>(null);
   /** Last colour array handed to the autosave effect (skips re-saving what is already stored). */
@@ -343,31 +379,47 @@ export default function App() {
   const hexByPosition = useMemo(() => palette.map((entry) => rgbToHex(entry.rgb)), [palette]);
   const positionByHex = useMemo(() => new Map(hexByPosition.map((hex, position) => [hex, position])), [hexByPosition]);
 
-  const hoverOverlay = useMemo<HighlightOverlay | null>(() => {
+  // Face masks shared by the 3D outlines and the colour map.
+  const hoverMask = useMemo<Uint8Array | null>(() => {
     if (!model || !hoverHex) return null;
     const position = positionByHex.get(hoverHex);
-    if (position === undefined) return null;
-    const { fill, edges } = highlightGeometry(model, maskFromLabels(labels, [position]));
-    return { id: "hover", colour: "#4fd8ff", opacity: 0.45, pulse: true, fill, edges };
+    return position === undefined ? null : maskFromLabels(labels, [position]);
   }, [model, hoverHex, positionByHex, labels]);
 
-  const selectedOverlay = useMemo<HighlightOverlay | null>(() => {
+  const selectedMask = useMemo<Uint8Array | null>(() => {
     if (!model) return null;
     const hexes = shownHex && !selectedHexes.includes(shownHex) ? [...selectedHexes, shownHex] : selectedHexes;
     if (hexes.length === 0) return null;
     const wanted = hexes.map((hex) => positionByHex.get(hex)).filter((p): p is number => p !== undefined);
-    if (wanted.length === 0) return null;
-    const { fill, edges } = highlightGeometry(model, maskFromLabels(labels, wanted));
-    return { id: "selected", colour: "#ffd84f", opacity: 0.35, pulse: true, fill, edges };
+    return wanted.length === 0 ? null : maskFromLabels(labels, wanted);
   }, [model, selectedHexes, shownHex, positionByHex, labels]);
 
-  const pickedOverlay = useMemo<HighlightOverlay | null>(() => {
+  const pickedMask = useMemo<Uint8Array | null>(() => {
     if (!model || pickedPatches.length === 0) return null;
     const mask = new Uint8Array(model.triangles.length);
     for (const patch of pickedPatches) for (let i = 0; i < patch.faces.length; i++) mask[patch.faces[i]] = 1;
-    const { fill, edges } = highlightGeometry(model, mask);
-    return { id: "picked", colour: "#ff8a3d", opacity: 0.55, pulse: true, fill, edges };
+    return mask;
   }, [model, pickedPatches]);
+
+  const atlasMasks = useMemo<AtlasMasks>(() => ({ hover: hoverMask, selected: selectedMask, picked: pickedMask }), [hoverMask, selectedMask, pickedMask]);
+
+  const hoverOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || !hoverMask) return null;
+    const { fill, edges } = highlightGeometry(model, hoverMask);
+    return { id: "hover", colour: "#4fd8ff", opacity: 0.45, pulse: true, fill, edges };
+  }, [model, hoverMask]);
+
+  const selectedOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || !selectedMask) return null;
+    const { fill, edges } = highlightGeometry(model, selectedMask);
+    return { id: "selected", colour: "#ffd84f", opacity: 0.35, pulse: true, fill, edges };
+  }, [model, selectedMask]);
+
+  const pickedOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || !pickedMask) return null;
+    const { fill, edges } = highlightGeometry(model, pickedMask);
+    return { id: "picked", colour: "#ff8a3d", opacity: 0.55, pulse: true, fill, edges };
+  }, [model, pickedMask]);
 
   const pickedFaceCount = useMemo(() => pickedPatches.reduce((sum, patch) => sum + patch.faces.length, 0), [pickedPatches]);
   const pickedFraction = useMemo(() => pickedPatches.reduce((sum, patch) => sum + patch.fraction, 0), [pickedPatches]);
@@ -671,6 +723,10 @@ export default function App() {
     loadGenerationRef.current += 1;
     modelFileRef.current = source;
     adjacencyRef.current = null;
+    atlasRef.current = null;
+    faceGeometryRef.current = null;
+    strokeRef.current = null;
+    setAtlas(null);
     originalColoursRef.current = options?.original ?? next.triangleColors;
     lastSavedColoursRef.current = next.triangleColors;
     setHistory(options?.history ?? []);
@@ -824,6 +880,10 @@ export default function App() {
     loadGenerationRef.current += 1;
     modelFileRef.current = null;
     adjacencyRef.current = null;
+    atlasRef.current = null;
+    faceGeometryRef.current = null;
+    strokeRef.current = null;
+    setAtlas(null);
     originalColoursRef.current = null;
     lastSavedColoursRef.current = null;
     setModel(null);
@@ -865,12 +925,191 @@ export default function App() {
     return adjacency;
   }
 
-  function applyColours(current: MeshModel, next: RGB[]): void {
+  function applyColours(current: MeshModel, next: RGB[], options?: { keepSelection?: boolean }): void {
     setHistory((prev) => [...prev.slice(-9), current.triangleColors]);
     setModel({ ...current, triangleColors: next, stats: { ...current.stats, uniqueFaceColors: countUniqueColours(next) } });
     setSettings((prev) => ({ ...prev, manualPhysical: {} }));
-    clearPick();
+    if (!options?.keepSelection) clearPick();
   }
+
+  // ------------------------------------------------------------------
+  // Colour map (face atlas) and brush
+  // ------------------------------------------------------------------
+  function faceGeometryFor(current: MeshModel): FaceGeometry {
+    const cached = faceGeometryRef.current;
+    if (cached && cached.triangles === current.triangles) return cached.geometry;
+    const geometry = faceGeometry(current);
+    faceGeometryRef.current = { triangles: current.triangles, geometry };
+    return geometry;
+  }
+
+  // Default brush size follows the model size.
+  useEffect(() => {
+    if (!model) return;
+    const radius = faceGeometryFor(model).radius;
+    setBrushRadius(Number((radius * 0.04).toPrecision(2)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geometryTriangles]);
+
+  // Full repaint of the map whenever the committed colours change.
+  useEffect(() => {
+    setColoursVersion((v) => v + 1);
+  }, [model?.triangleColors]);
+
+  // Build the atlas lazily when the map is shown.
+  useEffect(() => {
+    if (!showMap || !model) return;
+    const cached = atlasRef.current;
+    if (cached && cached.triangles === model.triangles) {
+      if (atlas !== cached.atlas) setAtlas(cached.atlas);
+      return;
+    }
+    let cancelled = false;
+    setAtlasBuilding(true);
+    setBusy(t("busy.atlas"));
+    const timer = window.setTimeout(() => {
+      try {
+        const size = model.triangles.length > 300_000 ? 3072 : 2048;
+        const built = buildFaceAtlas(model, adjacencyFor(model), faceGeometryFor(model), size);
+        atlasRef.current = { triangles: model.triangles, atlas: built };
+        if (!cancelled) {
+          setAtlas(built);
+          setStatus(t("status.atlasBuilt", { size, charts: built.chartCount.toLocaleString() }));
+        }
+      } catch (err) {
+        if (!cancelled) setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
+      } finally {
+        if (!cancelled) {
+          setAtlasBuilding(false);
+          setBusy(null);
+        }
+      }
+    }, 30);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMap, geometryTriangles]);
+
+  const brushHex = useMemo(() => {
+    const target = pickTarget || "__new__";
+    const candidate = (target === "__new__" ? pickCustom : target).toUpperCase();
+    if (/^#[0-9A-F]{6}$/.test(candidate)) return candidate;
+    return hexByPosition[0] ?? "#FF0000";
+  }, [pickTarget, pickCustom, hexByPosition]);
+
+  const colourOfFace = useCallback((face: number): RGB => {
+    const stroke = strokeRef.current;
+    if (stroke) return stroke.working[face];
+    return modelRef.current?.triangleColors[face] ?? [128, 128, 128];
+  }, []);
+
+  function viewerHandles(): MeshViewerHandle[] {
+    return viewerRefs.map((r) => r.current).filter((h): h is MeshViewerHandle => h !== null);
+  }
+
+  /** Starts a stroke; returns false when the brush is limited to a selection and there is none. */
+  function beginStroke(): boolean {
+    const current = modelRef.current;
+    if (!current) return false;
+    if (strokeRef.current) return true;
+    if (brushMaskOnly && !pickedMask) {
+      setStatus(t("status.brushNeedsSelection"));
+      return false;
+    }
+    strokeRef.current = { working: current.triangleColors.slice(), mask: brushMaskOnly ? pickedMask : null, count: 0, rgb: hexToRgb(brushHex), hex: brushHex };
+    return true;
+  }
+
+  function paintFaces(faces: ArrayLike<number>): void {
+    const stroke = strokeRef.current;
+    if (!stroke) return;
+    const { rgb, mask, working } = stroke;
+    const changed: number[] = [];
+    for (let i = 0; i < faces.length; i++) {
+      const f = faces[i];
+      if (mask && !mask[f]) continue;
+      const c = working[f];
+      if (c[0] === rgb[0] && c[1] === rgb[1] && c[2] === rgb[2]) continue;
+      working[f] = rgb;
+      changed.push(f);
+    }
+    if (changed.length === 0) return;
+    stroke.count += changed.length;
+    for (const handle of viewerHandles()) handle.setFaceColours(changed, rgb);
+    mapRef.current?.repaintFaces(changed);
+  }
+
+  function endStroke(): void {
+    const stroke = strokeRef.current;
+    const current = modelRef.current;
+    if (!stroke) return;
+    strokeRef.current = null;
+    if (!current) return;
+    if (stroke.count === 0) {
+      setStatus(t("status.brushNothing"));
+      return;
+    }
+    applyColours(current, stroke.working, { keepSelection: true });
+    setStatus(t("status.brushed", { n: stroke.count.toLocaleString(), hex: stroke.hex }));
+  }
+
+  function showBrushCursorAt(hit: ViewerHit | null): void {
+    for (const handle of viewerHandles()) handle.setBrushCursor(hit ? { point: hit.point, normal: hit.normal, radius: brushRadius } : null);
+  }
+
+  function brushHover3D(hit: ViewerHit | null): void {
+    showBrushCursorAt(hit);
+    const current = atlasRef.current?.atlas ?? null;
+    mapRef.current?.setRemoteCursor(hit && current ? faceAtlasCentre(current, hit.faceIndex) : null);
+  }
+
+  function paintAtHit(hit: ViewerHit | null, slot: number): void {
+    const current = modelRef.current;
+    if (!hit || !current || !strokeRef.current) return;
+    const viewDir = viewerRefs[slot]?.current?.viewDirection() ?? null;
+    paintFaces(facesInSphere(faceGeometryFor(current), hit.point, brushRadius, viewDir));
+  }
+
+  function brushStart3D(hit: ViewerHit | null, slot: number): void {
+    if (!beginStroke()) return;
+    paintAtHit(hit, slot);
+  }
+
+  function brushDrag3D(hit: ViewerHit | null, slot: number): void {
+    brushHover3D(hit);
+    paintAtHit(hit, slot);
+  }
+
+  function mapHover(face: number | null): void {
+    if (!brushMode) return;
+    const current = modelRef.current;
+    if (face === null || face < 0 || !current) {
+      showBrushCursorAt(null);
+      return;
+    }
+    const geometry = faceGeometryFor(current);
+    showBrushCursorAt({
+      faceIndex: face,
+      point: [geometry.centroids[face * 3], geometry.centroids[face * 3 + 1], geometry.centroids[face * 3 + 2]],
+      normal: [geometry.normals[face * 3], geometry.normals[face * 3 + 1], geometry.normals[face * 3 + 2]],
+    });
+  }
+
+  // Ctrl/Cmd+Z undoes the last colour change.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      undoMerge();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, model]);
 
   async function runMerge(flagsOverride?: Record<string, MergeFlag>): Promise<void> {
     if (!model || palette.length === 0) return;
@@ -1121,6 +1360,19 @@ export default function App() {
   }
 
   const isBusy = busy !== null;
+  const viewerCommon = (slot: number) => ({
+    view,
+    fitNonce,
+    overlays,
+    flat,
+    brush: brushMode,
+    emptyLabel: t("view.empty"),
+    onPick: (face: number | null, info: PickInfo) => void handlePick(face, info),
+    onBrushHover: brushHover3D,
+    onBrushStart: (hit: ViewerHit | null) => brushStart3D(hit, slot),
+    onBrushDrag: (hit: ViewerHit | null) => brushDrag3D(hit, slot),
+    onBrushEnd: endStroke,
+  });
   const autosaveLabel = !settings.rememberWork
     ? t("autosave.off")
     : autosave.state === "saving"
@@ -1293,6 +1545,19 @@ export default function App() {
               <label className="inline flat-toggle" style={{ marginLeft: 8 }} title={t("view.flatHint")}>
                 <input type="checkbox" checked={flat} onChange={(e) => setFlat(e.target.checked)} /> {t("view.flat")}
               </label>
+              <label className="inline map-toggle" style={{ marginLeft: 8 }} title={t("view.mapHint")}>
+                <input type="checkbox" checked={showMap} onChange={(e) => setShowMap(e.target.checked)} /> {t("view.map")}
+              </label>
+              <button
+                type="button"
+                className={`btn small brush-toggle${brushMode ? " active" : ""}`}
+                style={{ marginLeft: 8 }}
+                disabled={!model}
+                title={t("brush.hint")}
+                onClick={() => setBrushMode((v) => !v)}
+              >
+                {t("brush.toggle")}
+              </button>
               <HelpTip text={t("help.preview")} />
             </div>
             <div className="group">
@@ -1312,6 +1577,35 @@ export default function App() {
               ))}
             </div>
           </div>
+          {model && brushMode && (
+            <div className="brush-bar">
+              <b>{t("brush.title")}</b>
+              <span>{t("brush.colour")}</span>
+              <ColourSelect
+                value={pickTarget || "__new__"}
+                placeholder="…"
+                onChange={setPickTarget}
+                options={[
+                  ...palette.map((entry, position) => {
+                    const hex = rgbToHex(entry.rgb);
+                    return { value: hex, hex, label: `#${entry.index} ${hex}`, sub: pct(areaByPosition[position] ?? 0) };
+                  }),
+                  { value: "__new__", hex: pickCustom, label: t("pick.newColour") },
+                ]}
+              />
+              {(pickTarget === "__new__" || !pickTarget) && <ColourPicker value={pickCustom} onChange={(hex) => setPickCustom(hex.toUpperCase())} />}
+              <span className="cell-colour">
+                <Swatch hex={brushHex} size={14} /> <code>{brushHex}</code>
+              </span>
+              <span>{t("brush.size")}</span>
+              <NumberField value={brushRadius} min={0.01} max={1000} step={Math.max(0.01, Number((brushRadius / 5).toPrecision(1)))} onChange={(v) => setBrushRadius(Math.max(0.01, v))} />
+              <label className="inline" style={{ gap: 6 }}>
+                <input type="checkbox" checked={brushMaskOnly} onChange={(e) => setBrushMaskOnly(e.target.checked)} /> {t("brush.maskOnly")}
+              </label>
+              {brushMaskOnly && !pickedMask && <span className="warn">{t("brush.selectFirst")}</span>}
+              <span className="muted">{t("brush.hint")}</span>
+            </div>
+          )}
           {model && (
             <div className="pick-panel">
               {pickedPatches.length > 0 || shownHex ? (
@@ -1363,14 +1657,34 @@ export default function App() {
               )}
             </div>
           )}
-          <div className={`viewers${split ? " split" : ""}`}>
+          <div className={`viewers${split ? " split" : ""}${showMap ? " with-map" : ""}`}>
             {split ? (
               <>
-                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face, info) => void handlePick(face, info)} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} flat={flat} />
-                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face, info) => void handlePick(face, info)} label={t("view.printLabel")} emptyLabel={t("view.empty")} flat={flat} />
+                <MeshViewer ref={viewerRef0} positions={positions} colours={paletteColours} label={t("view.paletteLabel")} {...viewerCommon(0)} />
+                <MeshViewer ref={viewerRef1} positions={positions} colours={printColours} label={t("view.printLabel")} {...viewerCommon(1)} />
               </>
             ) : (
-              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face, info) => void handlePick(face, info)} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} flat={flat} />
+              <MeshViewer ref={viewerRef2} positions={positions} colours={coloursForMode(previewMode)} label={modeLabel[previewMode]} {...viewerCommon(2)} />
+            )}
+            {showMap && (
+              <ColourMap
+                ref={mapRef}
+                atlas={atlas}
+                building={atlasBuilding}
+                colourOf={colourOfFace}
+                coloursVersion={coloursVersion}
+                masks={atlasMasks}
+                brush={{ active: brushMode, radiusPx: atlas ? brushRadius * atlas.scale : 4, hex: brushHex }}
+                onPick={(face, info) => void handlePick(face, info)}
+                onHover={mapHover}
+                onBrushStart={() => void beginStroke()}
+                onBrushPaint={paintFaces}
+                onBrushEnd={endStroke}
+                label={t("map.label")}
+                hint={t("map.hint")}
+                emptyLabel={t("map.empty")}
+                buildingLabel={t("busy.atlas")}
+              />
             )}
           </div>
           <div className="legend">

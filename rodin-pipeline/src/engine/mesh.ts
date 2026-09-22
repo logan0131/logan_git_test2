@@ -46,7 +46,7 @@ export function buildPositions(model: MeshModel): Float32Array {
   return out;
 }
 
-function srgbToLinear(v: number): number {
+export function srgbToLinear(v: number): number {
   const c = Math.max(0, Math.min(1, v / 255));
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
@@ -246,6 +246,91 @@ export function sameLabelComponent(
       visited[n] = 1;
       queue.push(n);
     }
+  }
+  return Int32Array.from(out);
+}
+
+// ---------------------------------------------------------------------------
+// Face geometry (centroids / normals) and brush queries
+// ---------------------------------------------------------------------------
+
+export interface FaceGeometry {
+  /** 3 floats per face. */
+  centroids: Float32Array;
+  /** 3 floats per face, unit length (zero for degenerate faces). */
+  normals: Float32Array;
+  /** Half of the largest bounding-box extent: a size reference for brush radii. */
+  radius: number;
+}
+
+export function faceGeometry(model: MeshModel): FaceGeometry {
+  const n = model.triangles.length;
+  const centroids = new Float32Array(n * 3);
+  const normals = new Float32Array(n * 3);
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (const v of model.vertices) {
+    if (v[0] < minX) minX = v[0];
+    if (v[0] > maxX) maxX = v[0];
+    if (v[1] < minY) minY = v[1];
+    if (v[1] > maxY) maxY = v[1];
+    if (v[2] < minZ) minZ = v[2];
+    if (v[2] > maxZ) maxZ = v[2];
+  }
+  for (let i = 0; i < n; i++) {
+    const tri = model.triangles[i];
+    const a = model.vertices[tri[0]];
+    const b = model.vertices[tri[1]];
+    const c = model.vertices[tri[2]];
+    centroids[i * 3] = (a[0] + b[0] + c[0]) / 3;
+    centroids[i * 3 + 1] = (a[1] + b[1] + c[1]) / 3;
+    centroids[i * 3 + 2] = (a[2] + b[2] + c[2]) / 3;
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz);
+    if (len > 0) {
+      nx /= len;
+      ny /= len;
+      nz /= len;
+    }
+    normals[i * 3] = nx;
+    normals[i * 3 + 1] = ny;
+    normals[i * 3 + 2] = nz;
+  }
+  const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+  return { centroids, normals, radius: Number.isFinite(extent) ? extent / 2 : 1 };
+}
+
+/**
+ * Faces whose centroid lies within `radius` of `point`. With `viewDir` (the
+ * direction the camera looks along), back-facing faces are skipped so a brush
+ * does not leak through thin parts.
+ */
+export function facesInSphere(
+  geometry: FaceGeometry,
+  point: [number, number, number],
+  radius: number,
+  viewDir: [number, number, number] | null,
+): Int32Array {
+  const { centroids, normals } = geometry;
+  const n = centroids.length / 3;
+  const r2 = radius * radius;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const dx = centroids[i * 3] - point[0];
+    if (dx > radius || dx < -radius) continue;
+    const dy = centroids[i * 3 + 1] - point[1];
+    if (dy > radius || dy < -radius) continue;
+    const dz = centroids[i * 3 + 2] - point[2];
+    if (dx * dx + dy * dy + dz * dz > r2) continue;
+    if (viewDir) {
+      const dot = normals[i * 3] * viewDir[0] + normals[i * 3 + 1] * viewDir[1] + normals[i * 3 + 2] * viewDir[2];
+      if (dot > 0.25) continue;
+    }
+    out.push(i);
   }
   return Int32Array.from(out);
 }

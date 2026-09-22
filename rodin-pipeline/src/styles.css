@@ -205,3 +205,19 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 .help-popover .help-li { padding-left: 12px; text-indent: -12px; margin: 2px 0; color: var(--text); }
 .help-popover .help-li::before { content: "· "; color: var(--muted); }
 .pick-colour-mode { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(255, 216, 79, 0.14); color: #ffe38a; font-size: 0.82rem; }
+
+/* Colour map and brush */
+.viewers.with-map { grid-template-columns: 1fr 1fr; }
+.viewers.split.with-map { grid-template-columns: 1fr 1fr 1fr; }
+.colour-map { position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #14181d; display: grid; }
+.colour-map-host { position: absolute; inset: 0; }
+.colour-map-host canvas { display: block; cursor: grab; touch-action: none; }
+.colour-map.brushing .colour-map-host canvas { cursor: none; }
+.colour-map-fit { position: absolute; right: 8px; bottom: 8px; z-index: 2; }
+.brush-bar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); background: rgba(255, 138, 61, 0.10); font-size: 0.86rem; }
+.brush-bar input[type="number"] { width: 72px; }
+.btn.brush-toggle.active { background: #c9661f; border-color: #c9661f; }
+.mesh-viewer.brushing .mesh-viewer-host canvas { cursor: crosshair; }
+@media (max-width: 1400px) {
+  .viewers.split.with-map { grid-template-columns: 1fr 1fr; }
+}

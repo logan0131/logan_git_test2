@@ -70,9 +70,10 @@ import { MixSection, type PhysicalDirectSuggestion } from "./ui/MixSection";
 import { ExportSection, type ExportCheck } from "./ui/ExportSection";
 import { Swatch, pct } from "./ui/common";
 import { ColourSelect } from "./ui/ColourSelect";
+import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.3.2";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -114,6 +115,21 @@ export default function App() {
   const [nomadReport, setNomadReport] = useState<{ message: string; warnings: string[] } | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("palette");
   const [split, setSplit] = useState(true);
+  const [flat, setFlatState] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("rodin-pipeline-flat") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setFlat = (next: boolean) => {
+    setFlatState(next);
+    try {
+      window.localStorage.setItem("rodin-pipeline-flat", next ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  };
   const [view, setView] = useState<ViewName>("front");
   const [fitNonce, setFitNonce] = useState(0);
   const [hoverHex, setHoverHex] = useState<string | null>(null);
@@ -379,6 +395,36 @@ export default function App() {
     } finally {
       setBusy(null);
     }
+  }
+
+  /** Change the value of a palette colour: every face labelled with it takes the new colour. */
+  function recolourPaletteColour(oldHex: string, newHex: string): void {
+    if (!model) return;
+    const position = positionByHex.get(oldHex);
+    const target = newHex.toUpperCase();
+    if (position === undefined || !/^#[0-9A-F]{6}$/.test(target) || target === oldHex) return;
+    const rgb = hexToRgb(target);
+    const next = model.triangleColors.slice();
+    let n = 0;
+    for (let i = 0; i < labels.length; i++) {
+      if (labels[i] === position) {
+        next[i] = rgb;
+        n++;
+      }
+    }
+    // Carry the merge flags of the old colour over to the new hex.
+    setSettings((prev) => {
+      const flags = { ...prev.mergeFlags };
+      const own = flags[oldHex];
+      if (own) {
+        delete flags[oldHex];
+        flags[target] = { ...own, target: own.target === target ? null : own.target };
+      }
+      for (const key of Object.keys(flags)) if (flags[key].target === oldHex) flags[key] = { ...flags[key], target };
+      return { ...prev, mergeFlags: flags };
+    });
+    applyColours(model, next);
+    setStatus(t("status.paletteRecoloured", { from: oldHex, to: target, n: n.toLocaleString() }));
   }
 
   function applyPickColour(): void {
@@ -1072,6 +1118,7 @@ export default function App() {
             onRememberWork={(next) => patchSettings("rememberWork", next)}
             workState={model ? { restored: workRestored, undoSteps: history.length } : null}
             onClearWork={clearWork}
+            onRecolour={recolourPaletteColour}
           />
           <FilamentSection
             settings={settings.filaments}
@@ -1099,6 +1146,7 @@ export default function App() {
             onMergeSelected={mergeSelected}
             hoverHex={hoverHex}
             onHover={handleHover}
+            onRecolour={recolourPaletteColour}
           />
           <MixSection
             settings={settings.mix}
@@ -1160,6 +1208,9 @@ export default function App() {
               <label className="inline" style={{ marginLeft: 8 }}>
                 <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> {t("view.split")}
               </label>
+              <label className="inline flat-toggle" style={{ marginLeft: 8 }} title={t("view.flatHint")}>
+                <input type="checkbox" checked={flat} onChange={(e) => setFlat(e.target.checked)} /> {t("view.flat")}
+              </label>
             </div>
             <div className="group">
               <span>{t("view.direction")}</span>
@@ -1200,7 +1251,7 @@ export default function App() {
                       { value: "__new__", hex: pickCustom, label: t("pick.newColour") },
                     ]}
                   />
-                  {pickTarget === "__new__" && <input type="color" value={pickCustom} onChange={(e) => setPickCustom(e.target.value.toUpperCase())} />}
+                  {pickTarget === "__new__" && <ColourPicker value={pickCustom} onChange={(hex) => setPickCustom(hex.toUpperCase())} />}
                   <button
                     type="button"
                     className="btn primary small"
@@ -1221,11 +1272,11 @@ export default function App() {
           <div className={`viewers${split ? " split" : ""}`}>
             {split ? (
               <>
-                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} />
-                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.printLabel")} emptyLabel={t("view.empty")} />
+                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} flat={flat} />
+                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.printLabel")} emptyLabel={t("view.empty")} flat={flat} />
               </>
             ) : (
-              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} />
+              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} flat={flat} />
             )}
           </div>
           <div className="legend">

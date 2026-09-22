@@ -6,6 +6,7 @@ import type { MergeFlag, MergeSettings } from "../engine/types";
 import { useT } from "../i18n";
 import { NumberField, Row, Section, Swatch, pct } from "./common";
 import { ColourSelect } from "./ColourSelect";
+import { ColourPicker } from "./ColourPicker";
 
 export interface MergeReportRowData {
   label: string;
@@ -61,6 +62,7 @@ export function MergeSection({
   onMergeSelected,
   hoverHex,
   onHover,
+  onRecolour,
 }: {
   palette: PaletteEntry[];
   areaByPosition: Float64Array;
@@ -80,6 +82,8 @@ export function MergeSection({
   onMergeSelected: (targetHex: string) => void;
   hoverHex: string | null;
   onHover: (hex: string | null) => void;
+  /** Change the value of a palette colour (every face of that colour). */
+  onRecolour: (hex: string, next: string) => void;
 }) {
   const t = useT();
   const hexes = palette.map((entry) => rgbToHex(entry.rgb));
@@ -129,11 +133,11 @@ export function MergeSection({
                       <input type="checkbox" checked={isSelected} disabled={busy} onChange={() => onToggleSelected(hex)} title={t("merge.select")} />
                     </td>
                     <td>
-                      <span className="cell-colour">
+                      <ColourPicker value={hex} commit disabled={busy} onChange={(next) => onRecolour(hex, next)} className="palette-colour">
                         <Swatch rgb={entry.rgb} />
                         <span>#{entry.index}</span>
                         <code>{hex}</code>
-                      </span>
+                      </ColourPicker>
                     </td>
                     <td>{pct(areaByPosition[position] ?? 0)}</td>
                     <td>

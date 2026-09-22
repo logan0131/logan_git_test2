@@ -294,6 +294,16 @@ const ko = {
   "autosave.saving": "저장 중…",
   "autosave.failed": "자동 저장 실패 — 브라우저 저장소를 쓸 수 없습니다",
   "autosave.off": "자동 저장 꺼짐",
+  "view.flat": "평면색",
+  "view.flatHint": "조명과 음영 없이 면 색 값을 그대로 표시합니다. 색 비교용.",
+  "picker.editColour": "클릭해서 색 값 바꾸기 (HEX / RGB)",
+  "picker.hex": "HEX",
+  "picker.before": "이전 색",
+  "picker.after": "새 색",
+  "picker.system": "시스템",
+  "picker.apply": "적용",
+  "picker.cancel": "취소",
+  "status.paletteRecoloured": "팔레트 색 {from} → {to} ({n}면). 되돌리기로 취소할 수 있습니다.",
 };
 
 export type Key = keyof typeof ko;
@@ -581,6 +591,16 @@ const en: Record<Key, string> = {
   "autosave.saving": "saving…",
   "autosave.failed": "autosave failed — browser storage unavailable",
   "autosave.off": "autosave off",
+  "view.flat": "Flat colours",
+  "view.flatHint": "Show face colour values as they are, without lighting or shading. For colour comparison.",
+  "picker.editColour": "Click to change this colour (HEX / RGB)",
+  "picker.hex": "HEX",
+  "picker.before": "Current",
+  "picker.after": "New",
+  "picker.system": "System",
+  "picker.apply": "Apply",
+  "picker.cancel": "Cancel",
+  "status.paletteRecoloured": "Palette colour {from} → {to} ({n} faces). Undo reverts it.",
 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { ko, en };

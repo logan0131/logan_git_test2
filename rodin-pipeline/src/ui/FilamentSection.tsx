@@ -7,6 +7,7 @@ import { hexToRgb } from "../engine/mesh";
 import { useT, type Key } from "../i18n";
 import { Row, Section, Swatch } from "./common";
 import { ColourSelect } from "./ColourSelect";
+import { ColourPicker } from "./ColourPicker";
 
 function toFilament(entry: FilamentListEntry): Filament {
   const rgb = hexToRgb(entry.hex);
@@ -329,7 +330,9 @@ function FilamentRow({
     <>
       <span className="idx">E{index + 1}</span>
       <span className="cell-colour">
-        <input type="color" value={hex} onChange={(e) => onHex(e.target.value)} />
+        <ColourPicker value={hex.toUpperCase()} onChange={onHex} size={24} className="slot-colour">
+          <Swatch hex={hex} size={24} />
+        </ColourPicker>
       </span>
       <input type="text" value={name} onChange={(e) => onName(e.target.value)} placeholder={placeholder} title={name} />
       <input

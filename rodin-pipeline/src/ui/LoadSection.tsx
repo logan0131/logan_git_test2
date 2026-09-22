@@ -5,6 +5,7 @@ import { rgbToHex } from "@core/colour";
 import type { PaletteSettings } from "../engine/types";
 import { useT } from "../i18n";
 import { Row, Section, Swatch, pct } from "./common";
+import { ColourPicker } from "./ColourPicker";
 
 export interface SourceInfo {
   kind: "rodin" | "obj" | "nomad";
@@ -91,6 +92,7 @@ export function LoadSection({
   onRememberWork,
   workState,
   onClearWork,
+  onRecolour,
 }: {
   model: MeshModel | null;
   sourceInfo: SourceInfo | null;
@@ -109,6 +111,7 @@ export function LoadSection({
   onRememberWork: (next: boolean) => void;
   workState: WorkState | null;
   onClearWork: () => void;
+  onRecolour: (hex: string, next: string) => void;
 }) {
   const t = useT();
   const rodin = sourceInfo?.rodin;
@@ -222,10 +225,10 @@ export function LoadSection({
                 <tr key={entry.index}>
                   <td>#{entry.index}</td>
                   <td>
-                    <span className="cell-colour">
+                    <ColourPicker value={rgbToHex(entry.rgb)} commit disabled={busy} onChange={(next) => onRecolour(rgbToHex(entry.rgb), next)} className="palette-colour">
                       <Swatch rgb={entry.rgb} />
                       <code>{rgbToHex(entry.rgb)}</code>
-                    </span>
+                    </ColourPicker>
                   </td>
                   <td>{pct(areaByIndex.get(entry.index) ?? 0)}</td>
                   <td>{entry.count.toLocaleString()}</td>

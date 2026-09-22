@@ -26,6 +26,13 @@ export interface MeshViewerProps {
   label?: string;
   emptyLabel?: string;
   className?: string;
+  /** Unlit rendering: face colours exactly as stored, no shading. */
+  flat?: boolean;
+}
+
+function makeMeshMaterial(flat: boolean): THREE.Material {
+  if (flat) return new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff, side: THREE.DoubleSide });
+  return new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: 0.8, metalness: 0, side: THREE.DoubleSide });
 }
 
 interface OverlayObjects {
@@ -121,11 +128,13 @@ function startPulse(state: ViewerState): void {
   state.pulseRaf = window.requestAnimationFrame(tick);
 }
 
-export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className }: MeshViewerProps) {
+export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className, flat = false }: MeshViewerProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef<ViewerState | null>(null);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  const flatRef = useRef(flat);
+  flatRef.current = flat;
 
   // Create the renderer once.
   useEffect(() => {
@@ -244,13 +253,7 @@ export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPic
     geometry.computeBoundingSphere();
     const sphere = geometry.boundingSphere;
     state.bounds = sphere ? { center: sphere.center.clone(), radius: Math.max(1e-3, sphere.radius) } : null;
-    const material = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      color: 0xffffff,
-      roughness: 0.8,
-      metalness: 0,
-      side: THREE.DoubleSide,
-    });
+    const material = makeMeshMaterial(flatRef.current);
     const mesh = new THREE.Mesh(geometry, material);
     state.scene.add(mesh);
     state.mesh = mesh;
@@ -258,6 +261,16 @@ export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPic
     fitCamera(state, view);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions]);
+
+  // Flat (unlit) vs shaded material.
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state?.mesh) return;
+    const old = state.mesh.material as THREE.Material;
+    state.mesh.material = makeMeshMaterial(flat);
+    old.dispose();
+    requestRender(state);
+  }, [flat]);
 
   // Colour updates without rebuilding the geometry.
   useEffect(() => {

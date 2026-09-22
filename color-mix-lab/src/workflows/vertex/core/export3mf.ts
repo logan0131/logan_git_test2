@@ -83,6 +83,8 @@ export interface ExportAssignments {
   /** Old virtual id -> exported virtual id. */
   virtualIdRemap: Map<number, number>;
   physicalExtruderCount: number;
+  /** Source virtual ids left out because no triangle maps to any of their palette colours. */
+  droppedVirtuals: number[];
 }
 
 export interface ExportValidationInput {
@@ -309,11 +311,30 @@ function virtualFromBlend(entry: VirtualBlendEntry): ExportVirtualDefinition {
 export function buildExportAssignments(
   plan: VirtualExtruderPlan,
   physicalExtruderCount: number,
+  /**
+   * Palette indices that at least one triangle maps to.  A palette colour can
+   * end up with no triangles (median-cut centre that loses every member to a
+   * neighbour under the accent-aware metric, or a colour painted away later);
+   * its virtual extruder would then be defined in the JSON but never used,
+   * which PrusaSlicer rejects.  Such virtuals are dropped and reported.
+   */
+  usedPaletteIndices?: ReadonlySet<number>,
 ): ExportAssignments {
   const physicalCount = Math.max(1, Math.round(physicalExtruderCount));
+  const droppedVirtuals: number[] = [];
   const used = plan.virtualBlends
     .map(virtualFromBlend)
-    .filter((entry) => entry.paletteIndices.length > 0)
+    .filter((entry) => entry.paletteIndices.length > 0) // merged away in the plan itself
+    .map((entry) =>
+      usedPaletteIndices
+        ? { ...entry, paletteIndices: entry.paletteIndices.filter((index) => usedPaletteIndices.has(index)) }
+        : entry,
+    )
+    .filter((entry) => {
+      if (entry.paletteIndices.length > 0) return true;
+      droppedVirtuals.push(entry.sourceId);
+      return false;
+    })
     .sort((a, b) => a.sourceId - b.sourceId);
 
   const virtualIdRemap = new Map<number, number>();
@@ -345,7 +366,7 @@ export function buildExportAssignments(
       paletteToPaintCode.set(paletteIndex, code);
   }
 
-  return { virtuals, paletteToPaintCode, virtualIdRemap, physicalExtruderCount: physicalCount };
+  return { virtuals, paletteToPaintCode, virtualIdRemap, physicalExtruderCount: physicalCount, droppedVirtuals };
 }
 
 /**
@@ -475,17 +496,23 @@ function buildModelXml(
   options: Export3mfOptions,
   paletteToPaintCode: Map<number, string>,
   transform: string,
+  precomputedPaletteIndices?: number[],
 ): ModelXmlResult {
   const title = titleFromFilename(options.fileName);
   const model = options.model;
-  const paletteIndices = trianglePaletteIndices(
-    options.adjustedColors,
-    options.palette,
-    options.accentProtection ?? "balanced",
-  );
+  const paletteIndices =
+    precomputedPaletteIndices ??
+    trianglePaletteIndices(
+      options.adjustedColors,
+      options.palette,
+      options.accentProtection ?? "balanced",
+    );
   const leafByPaletteIndex = new Map<number, string>();
   const stateByPaletteIndex = new Map<number, number>();
+  // Only palette colours that a triangle actually uses need an assignment.
+  const usedPaletteIndices = new Set<number>(paletteIndices);
   for (const paletteIndex of options.palette.map((p) => p.index)) {
+    if (!usedPaletteIndices.has(paletteIndex)) continue;
     const paintCode = paletteToPaintCode.get(paletteIndex);
     if (!paintCode)
       throw new Error(
@@ -1107,6 +1134,8 @@ export interface Export3mfSummary {
   virtualIds: number[];
   /** Original virtual id -> exported id, only where the number changed. */
   renumberedVirtuals: Array<{ from: number; to: number }>;
+  /** Plan virtual ids left out because no triangle uses their palette colour. */
+  droppedVirtuals: number[];
   physicalOnlyExportedAsVirtual: number;
   printerConfigIncluded: boolean;
   transform: string;
@@ -1132,9 +1161,15 @@ export async function buildPrusa3mfBlob(
   const fileName = sanitise3mfName(options.fileName);
   const templateZip = await loadTemplateZip(options.templateArrayBuffer);
   const physicalExtruderCount = targetPhysicalExtruderCount(options.physicalSlots);
-  const { virtuals, paletteToPaintCode, virtualIdRemap } = buildExportAssignments(
+  const paletteIndices = trianglePaletteIndices(
+    options.adjustedColors,
+    options.palette,
+    options.accentProtection ?? "balanced",
+  );
+  const { virtuals, paletteToPaintCode, virtualIdRemap, droppedVirtuals } = buildExportAssignments(
     options.virtualPlan,
     physicalExtruderCount,
+    new Set(paletteIndices),
   );
   if (paletteToPaintCode.size === 0)
     throw new Error("No extruder assignments were generated.");
@@ -1148,6 +1183,7 @@ export async function buildPrusa3mfBlob(
     options,
     paletteToPaintCode,
     transformResult.transform,
+    paletteIndices,
   );
 
   // D-3: never write an inconsistent project.
@@ -1225,6 +1261,7 @@ export async function buildPrusa3mfBlob(
       physicalExtruderCount,
       virtualIds: virtuals.map((entry) => entry.id),
       renumberedVirtuals,
+      droppedVirtuals,
       physicalOnlyExportedAsVirtual: options.virtualPlan.physicalOnly.length,
       printerConfigIncluded,
       transform: transformResult.transform,

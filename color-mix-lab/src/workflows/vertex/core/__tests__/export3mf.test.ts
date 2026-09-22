@@ -136,6 +136,28 @@ describe("D-1 contiguous virtual extruder ids", () => {
     expect(decodePaintCode(result.paletteToPaintCode.get(7)!)).toBe(2);
   });
 
+  it("drops a virtual extruder whose palette colour no triangle maps to", async () => {
+    // Palette #4 (VE13) is a real palette entry, but every triangle maps elsewhere.
+    const { plan } = planWithGaps();
+    const usedByTriangles = new Set([1, 2, 3, 5, 6, 7]);
+    const assignments = buildExportAssignments(plan, 5, usedByTriangles);
+    expect(assignments.droppedVirtuals).toEqual([13]);
+    expect(assignments.virtuals.map((v) => v.sourceId)).toEqual([6, 7, 9, 14, 15]);
+    expect(assignments.virtuals.map((v) => v.id)).toEqual([6, 7, 8, 9, 10]);
+    expect(assignments.paletteToPaintCode.has(4)).toBe(false);
+
+    // End to end: recolour the faces of palette #4 so nothing uses it; the export
+    // must succeed instead of failing validation with an unused JSON entry.
+    const base = exportOptions();
+    const adjustedColors = base.adjustedColors.map((rgb) => (rgb.join(",") === base.palette[3].rgb.join(",") ? base.palette[0].rgb : rgb));
+    const result = await buildPrusa3mfBlob({ ...base, adjustedColors });
+    expect(result.summary.droppedVirtuals).toEqual([13]);
+    expect(result.summary.virtualIds).toEqual([6, 7, 8, 9, 10]);
+    const zip = await readZip(result.blob);
+    const json = JSON.parse(await zip.file("Metadata/Prusa_Slicer_full_spectrum.json")!.async("text"));
+    expect(json.virtual_extruders.map((v: { id: number }) => v.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
   it("writes the same ids into mmu_segmentation and full_spectrum.json", async () => {
     const result = await buildPrusa3mfBlob(exportOptions());
     expect(result.summary.virtualIds).toEqual([6, 7, 8, 9, 10, 11]);

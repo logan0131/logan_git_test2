@@ -85,7 +85,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.10";
+const APP_VERSION = "0.4.11";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -283,15 +283,38 @@ export default function App() {
     [geometryVertices, geometryTriangles],
   );
 
-  const palette = useMemo<PaletteEntry[]>(() => {
+  const rawPalette = useMemo<PaletteEntry[]>(() => {
     if (!model) return [];
     return medianCutPalette(model.triangleColors, settings.palette.maxColours, areaWeightList, settings.palette.accentProtection);
   }, [model, settings.palette.maxColours, settings.palette.accentProtection, areaWeightList]);
 
-  const labels = useMemo(
-    () => (model ? paletteLabels(model.triangleColors, palette, settings.palette.accentProtection) : new Int32Array(0)),
-    [model, palette, settings.palette.accentProtection],
+  const rawLabels = useMemo(
+    () => (model ? paletteLabels(model.triangleColors, rawPalette, settings.palette.accentProtection) : new Int32Array(0)),
+    [model, rawPalette, settings.palette.accentProtection],
   );
+
+  // A median-cut centre can lose every one of its faces to a neighbour under the
+  // accent-aware nearest-colour rule, leaving a palette entry with no faces.  Such
+  // an entry would get its own virtual extruder that no triangle uses, which the
+  // 3MF exporter (and PrusaSlicer) reject, so it is removed here and the labels
+  // are renumbered to the surviving positions.
+  const { palette, labels } = useMemo(() => {
+    if (rawPalette.length === 0) return { palette: rawPalette, labels: rawLabels };
+    const counts = new Int32Array(rawPalette.length);
+    for (let i = 0; i < rawLabels.length; i++) counts[rawLabels[i]]++;
+    if (counts.every((n) => n > 0)) return { palette: rawPalette, labels: rawLabels };
+    const remap = new Int32Array(rawPalette.length).fill(-1);
+    const kept: PaletteEntry[] = [];
+    rawPalette.forEach((entry, position) => {
+      if (counts[position] > 0) {
+        remap[position] = kept.length;
+        kept.push(entry);
+      }
+    });
+    const relabelled = new Int32Array(rawLabels.length);
+    for (let i = 0; i < rawLabels.length; i++) relabelled[i] = remap[rawLabels[i]];
+    return { palette: kept, labels: relabelled };
+  }, [rawPalette, rawLabels]);
   const areaByPosition = useMemo(() => areaFractionByPosition(labels, palette.length, areaWeights), [labels, palette.length, areaWeights]);
   const areaByIndex = useMemo(() => {
     const map = new Map<number, number>();
@@ -1462,9 +1485,12 @@ export default function App() {
         at: Date.now(),
       });
       const renumbered =
-        result.summary.renumberedVirtuals.length > 0
+        (result.summary.renumberedVirtuals.length > 0
           ? t("status.renumbered", { list: result.summary.renumberedVirtuals.map((r) => `VE${r.from}→VE${r.to}`).join(" ") })
-          : "";
+          : "") +
+        (result.summary.droppedVirtuals.length > 0
+          ? t("status.droppedVirtuals", { list: result.summary.droppedVirtuals.map((id) => `VE${id}`).join(" ") })
+          : "");
       setStatus(
         t("status.exported", {
           file: result.fileName,

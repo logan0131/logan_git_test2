@@ -74,8 +74,18 @@ export interface MergeFlag {
   minBlob: number;
 }
 
+export interface FilamentListEntry {
+  name: string;
+  type: string;
+  hex: string;
+}
+
 export interface PipelineSettings {
   version: 1;
+  /** Imported filament list (Filament-DB style: name; type; #hex). */
+  filamentList: FilamentListEntry[];
+  /** Keep the loaded PrusaSlicer template in the browser for next time. */
+  rememberTemplate: boolean;
   filaments: FilamentSettings;
   palette: PaletteSettings;
   merge: MergeSettings;
@@ -96,6 +106,8 @@ export const FILAMENT_PRESETS: Array<{ name: string; hex: string[]; label: strin
 
 export const DEFAULT_SETTINGS: PipelineSettings = {
   version: 1,
+  filamentList: [],
+  rememberTemplate: true,
   filaments: {
     count: 5,
     hex: ["#FFFFFF", "#111111", "#00B7EB", "#E4007C", "#FFE600", "#FF0000", "#00FF00", "#0000FF"],

@@ -151,3 +151,101 @@ export function hexToRgb(hex: string): RGB {
   const n = parseInt(m[1], 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+
+// ---------------------------------------------------------------------------
+// Highlighting and region picking
+// ---------------------------------------------------------------------------
+
+/** 1 for every face whose palette position is in `positions`. */
+export function maskFromLabels(labels: Int32Array, positions: Iterable<number>): Uint8Array {
+  const wanted = new Set(positions);
+  const mask = new Uint8Array(labels.length);
+  if (wanted.size === 0) return mask;
+  for (let i = 0; i < labels.length; i++) if (wanted.has(labels[i])) mask[i] = 1;
+  return mask;
+}
+
+export function maskFromFaces(faceCount: number, faces: ArrayLike<number>): Uint8Array {
+  const mask = new Uint8Array(faceCount);
+  for (let i = 0; i < faces.length; i++) mask[faces[i]] = 1;
+  return mask;
+}
+
+export interface HighlightGeometry {
+  /** Non-indexed positions of the highlighted faces (3 corners each). */
+  fill: Float32Array;
+  /** Boundary edges of the highlighted region as line segments (2 points each). */
+  edges: Float32Array;
+  faceCount: number;
+}
+
+/**
+ * Geometry for a glowing region highlight: the faces themselves plus the
+ * outline where a highlighted face meets a non-highlighted one.
+ */
+export function highlightGeometry(model: MeshModel, mask: Uint8Array): HighlightGeometry {
+  let faceCount = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]) faceCount++;
+  const fill = new Float32Array(faceCount * 9);
+  const edgeCount = new Map<number, number>();
+  const vertexCount = model.vertices.length;
+  let p = 0;
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const tri = model.triangles[i];
+    for (let k = 0; k < 3; k++) {
+      const v = model.vertices[tri[k]];
+      fill[p++] = v[0];
+      fill[p++] = v[1];
+      fill[p++] = v[2];
+      const a = tri[k];
+      const b = tri[(k + 1) % 3];
+      const key = (a < b ? a : b) * vertexCount + (a < b ? b : a);
+      edgeCount.set(key, (edgeCount.get(key) ?? 0) + 1);
+    }
+  }
+  let boundary = 0;
+  for (const count of edgeCount.values()) if (count === 1) boundary++;
+  const edges = new Float32Array(boundary * 6);
+  let e = 0;
+  for (const [key, count] of edgeCount) {
+    if (count !== 1) continue;
+    const a = Math.floor(key / vertexCount);
+    const b = key - a * vertexCount;
+    const va = model.vertices[a];
+    const vb = model.vertices[b];
+    edges[e++] = va[0];
+    edges[e++] = va[1];
+    edges[e++] = va[2];
+    edges[e++] = vb[0];
+    edges[e++] = vb[1];
+    edges[e++] = vb[2];
+  }
+  return { fill, edges, faceCount };
+}
+
+/** Faces connected to `start` (sharing vertices) that carry the same label. */
+export function sameLabelComponent(
+  adjacencyOffsets: Int32Array,
+  adjacencyNeighbours: Int32Array,
+  labels: Int32Array,
+  start: number,
+): Int32Array {
+  const label = labels[start];
+  const visited = new Uint8Array(labels.length);
+  const queue: number[] = [start];
+  visited[start] = 1;
+  const out: number[] = [];
+  while (queue.length > 0) {
+    const f = queue.pop() as number;
+    out.push(f);
+    const end = adjacencyOffsets[f + 1];
+    for (let i = adjacencyOffsets[f]; i < end; i++) {
+      const n = adjacencyNeighbours[i];
+      if (visited[n] || labels[n] !== label) continue;
+      visited[n] = 1;
+      queue.push(n);
+    }
+  }
+  return Int32Array.from(out);
+}

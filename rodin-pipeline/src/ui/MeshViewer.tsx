@@ -3,15 +3,38 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { ViewName } from "../engine/types";
 
+export interface HighlightOverlay {
+  id: string;
+  /** Non-indexed face positions (3 corners each). */
+  fill: Float32Array;
+  /** Boundary line segments (2 points each). */
+  edges: Float32Array;
+  colour: string;
+  pulse?: boolean;
+  opacity?: number;
+}
+
 export interface MeshViewerProps {
   positions: Float32Array | null;
   colours: Float32Array | null;
   view: ViewName;
   /** Bump to re-fit the camera to the current view. */
   fitNonce: number;
+  overlays?: HighlightOverlay[];
+  /** Called with the clicked face index (or null when nothing was hit). */
+  onPick?: (faceIndex: number | null) => void;
   label?: string;
   emptyLabel?: string;
   className?: string;
+}
+
+interface OverlayObjects {
+  mesh: THREE.Mesh;
+  lines: THREE.LineSegments;
+  fillMaterial: THREE.MeshBasicMaterial;
+  lineMaterial: THREE.LineBasicMaterial;
+  baseOpacity: number;
+  pulse: boolean;
 }
 
 interface ViewerState {
@@ -21,8 +44,11 @@ interface ViewerState {
   controls: OrbitControls;
   mesh: THREE.Mesh | null;
   geometry: THREE.BufferGeometry | null;
+  overlayGroup: THREE.Group;
+  overlays: OverlayObjects[];
   needsRender: boolean;
   raf: number | null;
+  pulseRaf: number | null;
   bounds: { center: THREE.Vector3; radius: number } | null;
 }
 
@@ -62,9 +88,44 @@ function fitCamera(state: ViewerState, view: ViewName): void {
   requestRender(state);
 }
 
-export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLabel, className }: MeshViewerProps) {
+function disposeOverlays(state: ViewerState): void {
+  for (const overlay of state.overlays) {
+    state.overlayGroup.remove(overlay.mesh);
+    state.overlayGroup.remove(overlay.lines);
+    overlay.mesh.geometry.dispose();
+    overlay.lines.geometry.dispose();
+    overlay.fillMaterial.dispose();
+    overlay.lineMaterial.dispose();
+  }
+  state.overlays = [];
+  if (state.pulseRaf !== null) {
+    window.cancelAnimationFrame(state.pulseRaf);
+    state.pulseRaf = null;
+  }
+}
+
+function startPulse(state: ViewerState): void {
+  if (state.pulseRaf !== null) return;
+  const tick = (time: number) => {
+    state.pulseRaf = null;
+    const pulsing = state.overlays.filter((overlay) => overlay.pulse);
+    if (pulsing.length === 0) return;
+    const wave = 0.5 + 0.5 * Math.sin(time / 260);
+    for (const overlay of pulsing) {
+      overlay.fillMaterial.opacity = overlay.baseOpacity * (0.55 + 0.45 * wave);
+      overlay.lineMaterial.opacity = 0.55 + 0.45 * wave;
+    }
+    requestRender(state);
+    state.pulseRaf = window.requestAnimationFrame(tick);
+  };
+  state.pulseRaf = window.requestAnimationFrame(tick);
+}
+
+export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className }: MeshViewerProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef<ViewerState | null>(null);
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
 
   // Create the renderer once.
   useEffect(() => {
@@ -85,6 +146,8 @@ export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLab
     const fill = new THREE.DirectionalLight(0xffffff, 0.6);
     fill.position.set(2.0, 1.5, -1.0);
     scene.add(fill);
+    const overlayGroup = new THREE.Group();
+    scene.add(overlayGroup);
 
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1000);
     camera.up.set(0, 0, 1);
@@ -98,12 +161,38 @@ export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLab
       controls,
       mesh: null,
       geometry: null,
+      overlayGroup,
+      overlays: [],
       needsRender: true,
       raf: null,
+      pulseRaf: null,
       bounds: null,
     };
     stateRef.current = state;
     controls.addEventListener("change", () => requestRender(state));
+
+    // Click (not drag) picking.
+    let down: { x: number; y: number; time: number } | null = null;
+    const raycaster = new THREE.Raycaster();
+    const onPointerDown = (event: PointerEvent) => {
+      down = { x: event.clientX, y: event.clientY, time: performance.now() };
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!down) return;
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      const elapsed = performance.now() - down.time;
+      down = null;
+      if (moved > 5 || elapsed > 600 || event.button !== 0) return;
+      const handler = onPickRef.current;
+      if (!handler || !state.mesh) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const hits = raycaster.intersectObject(state.mesh, false);
+      handler(hits.length > 0 && hits[0].faceIndex !== undefined ? hits[0].faceIndex : null);
+    };
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
 
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
@@ -119,6 +208,9 @@ export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLab
 
     return () => {
       observer.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      disposeOverlays(state);
       controls.dispose();
       state.geometry?.dispose();
       (state.mesh?.material as THREE.Material | undefined)?.dispose();
@@ -181,6 +273,44 @@ export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLab
     requestRender(state);
   }, [colours]);
 
+  // Highlight overlays.
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    disposeOverlays(state);
+    for (const overlay of overlays ?? []) {
+      if (overlay.fill.length === 0) continue;
+      const colour = new THREE.Color(overlay.colour);
+      const fillGeometry = new THREE.BufferGeometry();
+      fillGeometry.setAttribute("position", new THREE.BufferAttribute(overlay.fill, 3));
+      const baseOpacity = overlay.opacity ?? 0.5;
+      const fillMaterial = new THREE.MeshBasicMaterial({
+        color: colour,
+        transparent: true,
+        opacity: baseOpacity,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+        side: THREE.DoubleSide,
+      });
+      fillMaterial.toneMapped = false;
+      const mesh = new THREE.Mesh(fillGeometry, fillMaterial);
+      mesh.renderOrder = 2;
+      const lineGeometry = new THREE.BufferGeometry();
+      lineGeometry.setAttribute("position", new THREE.BufferAttribute(overlay.edges, 3));
+      const lineMaterial = new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.9, depthTest: false });
+      lineMaterial.toneMapped = false;
+      const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+      lines.renderOrder = 3;
+      state.overlayGroup.add(mesh);
+      state.overlayGroup.add(lines);
+      state.overlays.push({ mesh, lines, fillMaterial, lineMaterial, baseOpacity, pulse: overlay.pulse !== false });
+    }
+    requestRender(state);
+    if (state.overlays.some((o) => o.pulse)) startPulse(state);
+  }, [overlays]);
+
   // View changes.
   useEffect(() => {
     const state = stateRef.current;
@@ -193,7 +323,7 @@ export function MeshViewer({ positions, colours, view, fitNonce, label, emptyLab
       {label && <div className="mesh-viewer-label">{label}</div>}
       <div className="mesh-viewer-host" ref={hostRef} />
       {(!positions || positions.length === 0) && (
-        <div className="mesh-viewer-empty">{emptyLabel ?? "모델을 불러오면 여기에 표시됩니다."}</div>
+        <div className="mesh-viewer-empty">{emptyLabel ?? "Load a model to see it here."}</div>
       )}
     </div>
   );

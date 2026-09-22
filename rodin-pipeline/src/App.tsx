@@ -35,12 +35,16 @@ import {
   colourKey,
   countUniqueColours,
   hexToRgb,
+  highlightGeometry,
+  maskFromFaces,
+  maskFromLabels,
   paletteLabels,
   representativeColoursByPosition,
+  sameLabelComponent,
   triangleAreaWeights,
 } from "./engine/mesh";
-import { downloadTextFile, loadStoredSettings, mergeSettings, settingsToJson, storeSettings } from "./engine/storage";
-import { MeshViewer } from "./ui/MeshViewer";
+import { downloadTextFile, idbDelete, idbGet, idbSet, loadStoredSettings, mergeSettings, settingsToJson, storeSettings } from "./engine/storage";
+import { MeshViewer, type HighlightOverlay } from "./ui/MeshViewer";
 import { LoadSection, type SourceInfo } from "./ui/LoadSection";
 import { FilamentSection } from "./ui/FilamentSection";
 import { MergeSection, type MergeReportData } from "./ui/MergeSection";
@@ -49,7 +53,7 @@ import { ExportSection, type ExportCheck } from "./ui/ExportSection";
 import { Swatch, pct } from "./ui/common";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.2.0";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -79,6 +83,13 @@ export default function App() {
   const [split, setSplit] = useState(true);
   const [view, setView] = useState<ViewName>("front");
   const [fitNonce, setFitNonce] = useState(0);
+  const [hoverHex, setHoverHex] = useState<string | null>(null);
+  const [selectedHexes, setSelectedHexes] = useState<string[]>([]);
+  const [picked, setPicked] = useState<{ faces: Int32Array; hex: string; index: number; fraction: number } | null>(null);
+  const [pickTarget, setPickTarget] = useState("");
+  const [pickCustom, setPickCustom] = useState("#FF0000");
+  const hoverTimerRef = useRef<number | null>(null);
+  const templateRestoredRef = useRef(false);
   const adjacencyRef = useRef<{ triangles: MeshModel["triangles"]; adjacency: FaceAdjacency } | null>(null);
   const modelFileRef = useRef<File | null>(null);
 
@@ -230,6 +241,146 @@ export default function App() {
     }
   }, [plan, palette, slots.length]);
 
+  // ------------------------------------------------------------------
+  // Highlights (hover / selected colours / picked patch), picking, template memory
+  // ------------------------------------------------------------------
+  const hexByPosition = useMemo(() => palette.map((entry) => rgbToHex(entry.rgb)), [palette]);
+  const positionByHex = useMemo(() => new Map(hexByPosition.map((hex, position) => [hex, position])), [hexByPosition]);
+
+  const hoverOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || !hoverHex) return null;
+    const position = positionByHex.get(hoverHex);
+    if (position === undefined) return null;
+    const { fill, edges } = highlightGeometry(model, maskFromLabels(labels, [position]));
+    return { id: "hover", colour: "#4fd8ff", opacity: 0.45, pulse: true, fill, edges };
+  }, [model, hoverHex, positionByHex, labels]);
+
+  const selectedOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || selectedHexes.length === 0) return null;
+    const wanted = selectedHexes.map((hex) => positionByHex.get(hex)).filter((p): p is number => p !== undefined);
+    if (wanted.length === 0) return null;
+    const { fill, edges } = highlightGeometry(model, maskFromLabels(labels, wanted));
+    return { id: "selected", colour: "#ffd84f", opacity: 0.35, pulse: true, fill, edges };
+  }, [model, selectedHexes, positionByHex, labels]);
+
+  const pickedOverlay = useMemo<HighlightOverlay | null>(() => {
+    if (!model || !picked) return null;
+    const { fill, edges } = highlightGeometry(model, maskFromFaces(model.triangles.length, picked.faces));
+    return { id: "picked", colour: "#ff8a3d", opacity: 0.55, pulse: true, fill, edges };
+  }, [model, picked]);
+
+  const overlays = useMemo(
+    () => [selectedOverlay, hoverOverlay, pickedOverlay].filter((o): o is HighlightOverlay => o !== null),
+    [selectedOverlay, hoverOverlay, pickedOverlay],
+  );
+
+  function handleHover(hex: string | null): void {
+    if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      setHoverHex(hex);
+    }, hex ? 90 : 160);
+  }
+
+  function toggleSelectedHex(hex: string): void {
+    setSelectedHexes((prev) => (prev.includes(hex) ? prev.filter((h) => h !== hex) : [...prev, hex]));
+  }
+
+  function mergeSelected(targetHex: string): void {
+    if (!targetHex || !positionByHex.has(targetHex)) return;
+    const nextFlags = { ...settings.mergeFlags };
+    for (const hex of selectedHexes) {
+      if (hex === targetHex || !positionByHex.has(hex)) continue;
+      nextFlags[hex] = {
+        ...(nextFlags[hex] ?? { target: null, ambiguous: false, protect: false, minBlob: settings.merge.minBlobDefault }),
+        target: targetHex,
+      };
+    }
+    setSettings((prev) => ({ ...prev, mergeFlags: nextFlags }));
+    setSelectedHexes([]);
+    void runMerge(nextFlags);
+  }
+
+  async function handlePick(faceIndex: number | null): Promise<void> {
+    if (!model) return;
+    if (faceIndex === null || faceIndex < 0 || faceIndex >= labels.length) {
+      if (picked) setPicked(null);
+      else setStatus(t("status.pickNothing"));
+      return;
+    }
+    setBusy(t("busy.picking"));
+    await yieldToUi();
+    try {
+      const adjacency = adjacencyFor(model);
+      const faces = sameLabelComponent(adjacency.offsets, adjacency.neighbours, labels, faceIndex);
+      const position = labels[faceIndex];
+      const hex = hexByPosition[position] ?? rgbToHex(model.triangleColors[faceIndex]);
+      let area = 0;
+      let total = 0;
+      for (let i = 0; i < areaWeights.length; i++) total += areaWeights[i];
+      for (let i = 0; i < faces.length; i++) area += areaWeights[faces[i]];
+      const fraction = total > 0 ? area / total : 0;
+      const index = palette[position]?.index ?? 0;
+      setPicked({ faces, hex, index, fraction });
+      setPickTarget("");
+      setStatus(t("status.picked", { index, hex, n: faces.length.toLocaleString(), pct: pct(fraction) }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function applyPickColour(): void {
+    if (!model || !picked) return;
+    const targetHex = (pickTarget === "__new__" ? pickCustom : pickTarget).toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(targetHex)) return;
+    const position = positionByHex.get(targetHex);
+    const representatives = representativeColoursByPosition(model.triangleColors, labels, palette);
+    const rgb: RGB = position !== undefined ? representatives[position] : hexToRgb(targetHex);
+    const next = model.triangleColors.slice();
+    for (let i = 0; i < picked.faces.length; i++) next[picked.faces[i]] = rgb;
+    const count = picked.faces.length;
+    applyColours(model, next);
+    setStatus(t("status.recoloured", { n: count.toLocaleString(), hex: targetHex }));
+  }
+
+  // Remembered PrusaSlicer template (IndexedDB).
+  useEffect(() => {
+    if (templateRestoredRef.current) return;
+    templateRestoredRef.current = true;
+    if (!settings.rememberTemplate) return;
+    void (async () => {
+      const stored = await idbGet<{ name: string; buffer: ArrayBuffer }>("template");
+      if (!stored || !(stored.buffer instanceof ArrayBuffer)) return;
+      try {
+        const file = new File([stored.buffer], stored.name, { type: "model/3mf" });
+        const info = await readTemplate3mf(file);
+        setTemplate({ info, buffer: stored.buffer });
+        if (info.bedSize) {
+          const bedX = Math.round(info.bedSize.x);
+          const bedY = Math.round(info.bedSize.y);
+          setSettings((prev) => ({ ...prev, export: { ...prev.export, bedX, bedY } }));
+        }
+        setStatus(t("status.templateRestored", { name: stored.name }));
+      } catch {
+        void idbDelete("template");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!settings.rememberTemplate) {
+      void idbDelete("template");
+      return;
+    }
+    if (template) void idbSet("template", { name: template.info.fileName, buffer: template.buffer });
+  }, [settings.rememberTemplate, template]);
+
+  function clearTemplate(): void {
+    setTemplate(null);
+    void idbDelete("template");
+  }
+
   // Suggest merge flags for palette colours that have none yet.
   useEffect(() => {
     if (palette.length === 0) return;
@@ -291,6 +442,9 @@ export default function App() {
     setHistory([]);
     setMergeReport(null);
     setNomadReport(null);
+    setPicked(null);
+    setSelectedHexes([]);
+    setHoverHex(null);
     setModel(next);
     setSourceInfo(info);
     setSettings((prev) => ({ ...prev, manualPhysical: {}, export: { ...prev.export, fileName: "" } }));
@@ -373,10 +527,12 @@ export default function App() {
     setHistory((prev) => [...prev.slice(-9), current.triangleColors]);
     setModel({ ...current, triangleColors: next, stats: { ...current.stats, uniqueFaceColors: countUniqueColours(next) } });
     setSettings((prev) => ({ ...prev, manualPhysical: {} }));
+    setPicked(null);
   }
 
-  async function runMerge(): Promise<void> {
+  async function runMerge(flagsOverride?: Record<string, MergeFlag>): Promise<void> {
     if (!model || palette.length === 0) return;
+    const flags = flagsOverride ?? settings.mergeFlags;
     setBusy(t("busy.adjacency"));
     await yieldToUi();
     try {
@@ -385,7 +541,7 @@ export default function App() {
       const targetOf = (position: number): number => {
         let current = position;
         for (let hop = 0; hop < palette.length; hop++) {
-          const target = settings.mergeFlags[hexes[current]]?.target;
+          const target = flags[hexes[current]]?.target;
           const next = target ? positionByHex.get(target) : undefined;
           if (next === undefined || next === current) return current;
           current = next;
@@ -401,7 +557,7 @@ export default function App() {
         setStatus(t("status.noMergeTargets"));
         return;
       }
-      const flagOf = (position: number) => settings.mergeFlags[hexes[position]];
+      const flagOf = (position: number) => flags[hexes[position]];
       const ambiguousLabels = hexes.map((_h, p) => p).filter((p) => headOf[p] !== p && flagOf(p)?.ambiguous);
       const protectGroups = new Set<number>();
       hexes.forEach((_h, p) => {
@@ -650,11 +806,19 @@ export default function App() {
             onModelFile={(file) => void onModelFile(file)}
             templateInfo={template?.info ?? null}
             onTemplateFile={(file) => void onTemplateFile(file)}
-            onClearTemplate={() => setTemplate(null)}
+            onClearTemplate={clearTemplate}
             palette={palette}
             areaByIndex={areaByIndex}
+            rememberTemplate={settings.rememberTemplate}
+            onRememberTemplate={(next) => patchSettings("rememberTemplate", next)}
           />
-          <FilamentSection settings={settings.filaments} onChange={(next) => patchSettings("filaments", next)} palette={palette} />
+          <FilamentSection
+            settings={settings.filaments}
+            onChange={(next) => patchSettings("filaments", next)}
+            palette={palette}
+            list={settings.filamentList}
+            onListChange={(next) => patchSettings("filamentList", next)}
+          />
           <MergeSection
             palette={palette}
             areaByPosition={areaByPosition}
@@ -668,6 +832,12 @@ export default function App() {
             undoCount={history.length}
             report={mergeReport}
             busy={isBusy}
+            selected={selectedHexes}
+            onToggleSelected={toggleSelectedHex}
+            onClearSelection={() => setSelectedHexes([])}
+            onMergeSelected={mergeSelected}
+            hoverHex={hoverHex}
+            onHover={handleHover}
           />
           <MixSection
             settings={settings.mix}
@@ -734,17 +904,64 @@ export default function App() {
               ))}
             </div>
           </div>
+          {model && (
+            <div className="pick-panel">
+              {picked ? (
+                <>
+                  <b>{t("pick.title")}</b>
+                  <span className="cell-colour">
+                    <Swatch hex={picked.hex} size={14} /> #{picked.index} <code>{picked.hex}</code>
+                  </span>
+                  <span className="muted">{t("pick.faces", { n: picked.faces.length.toLocaleString(), pct: pct(picked.fraction) })}</span>
+                  <span>{t("pick.changeTo")}</span>
+                  <select value={pickTarget} onChange={(e) => setPickTarget(e.target.value)}>
+                    <option value="">…</option>
+                    {palette.map((entry) => {
+                      const hex = rgbToHex(entry.rgb);
+                      return (
+                        <option key={entry.index} value={hex} disabled={hex === picked.hex}>
+                          #{entry.index} {hex}
+                        </option>
+                      );
+                    })}
+                    <option value="__new__">{t("pick.newColour")}</option>
+                  </select>
+                  {pickTarget === "__new__" && <input type="color" value={pickCustom} onChange={(e) => setPickCustom(e.target.value.toUpperCase())} />}
+                  <button
+                    type="button"
+                    className="btn primary small"
+                    disabled={isBusy || !pickTarget || (pickTarget !== "__new__" && pickTarget === picked.hex)}
+                    onClick={applyPickColour}
+                  >
+                    {t("pick.apply")}
+                  </button>
+                  <button type="button" className="btn small" onClick={() => setPicked(null)}>
+                    {t("pick.clear")}
+                  </button>
+                </>
+              ) : (
+                <span className="muted">{t("pick.hint")}</span>
+              )}
+            </div>
+          )}
           <div className={`viewers${split ? " split" : ""}`}>
             {split ? (
               <>
-                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} />
-                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} label={t("view.printLabel")} emptyLabel={t("view.empty")} />
+                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} />
+                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={t("view.printLabel")} emptyLabel={t("view.empty")} />
               </>
             ) : (
-              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} />
+              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} overlays={overlays} onPick={(face) => void handlePick(face)} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} />
             )}
           </div>
           <div className="legend">
+            {overlays.length > 0 && (
+              <span className="legend-item">
+                <span className="legend-key" style={{ background: "#4fd8ff" }} /> {t("legend.hover")}
+                <span className="legend-key" style={{ background: "#ffd84f", marginLeft: 8 }} /> {t("legend.selected")}
+                <span className="legend-key" style={{ background: "#ff8a3d", marginLeft: 8 }} /> {t("legend.picked")}
+              </span>
+            )}
             {plan &&
               plan.virtualBlends.map((entry) => (
                 <span key={`v${entry.virtualId}`} className="legend-item">

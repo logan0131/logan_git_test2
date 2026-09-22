@@ -15,6 +15,12 @@ export function mergeSettings(stored: unknown): PipelineSettings {
     if (isRecord(value)) Object.assign(out[section] as unknown as Record<string, unknown>, value);
   }
   if (isRecord(stored.mergeFlags)) out.mergeFlags = stored.mergeFlags as PipelineSettings["mergeFlags"];
+  if (Array.isArray(stored.filamentList))
+    out.filamentList = stored.filamentList.filter(
+      (entry): entry is PipelineSettings["filamentList"][number] =>
+        isRecord(entry) && typeof entry.name === "string" && typeof entry.hex === "string" && /^#[0-9a-fA-F]{6}$/.test(entry.hex),
+    );
+  if (typeof stored.rememberTemplate === "boolean") out.rememberTemplate = stored.rememberTemplate;
   if (isRecord(stored.manualPhysical)) out.manualPhysical = stored.manualPhysical as PipelineSettings["manualPhysical"];
   // Keep fixed-length arrays well formed.
   const hex = Array.isArray(out.filaments.hex) ? out.filaments.hex : [];
@@ -61,4 +67,69 @@ export function downloadTextFile(fileName: string, text: string, mime = "applica
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// IndexedDB for binary blobs (template 3MF) that do not fit localStorage.
+// ---------------------------------------------------------------------------
+
+const DB_NAME = "rodin-pipeline";
+const STORE = "files";
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB unavailable"));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+  });
+}
+
+export async function idbGet<T>(key: string): Promise<T | null> {
+  try {
+    const db = await openDb();
+    return await new Promise<T | null>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const request = tx.objectStore(STORE).get(key);
+      request.onsuccess = () => resolve((request.result as T | undefined) ?? null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function idbSet(key: string, value: unknown): Promise<boolean> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function idbDelete(key: string): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
 }

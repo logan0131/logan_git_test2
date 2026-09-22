@@ -75,6 +75,8 @@ export function LoadSection({
   onClearTemplate,
   palette,
   areaByIndex,
+  rememberTemplate,
+  onRememberTemplate,
 }: {
   model: MeshModel | null;
   sourceInfo: SourceInfo | null;
@@ -85,6 +87,8 @@ export function LoadSection({
   onClearTemplate: () => void;
   palette: PaletteEntry[];
   areaByIndex: Map<number, number>;
+  rememberTemplate: boolean;
+  onRememberTemplate: (next: boolean) => void;
 }) {
   const t = useT();
   const rodin = sourceInfo?.rodin;
@@ -172,6 +176,10 @@ export function LoadSection({
             disabled={busy}
             onFile={onTemplateFile}
           />
+          <label className="inline" style={{ gap: 8 }}>
+            <input type="checkbox" checked={rememberTemplate} onChange={(e) => onRememberTemplate(e.target.checked)} />
+            <span className="muted">{t("load.rememberTemplate")}</span>
+          </label>
           {templateInfo && (
             <div className="inline">
               <span className="muted">

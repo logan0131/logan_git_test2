@@ -238,3 +238,5 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 .pick-extruders { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pick-extruder { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
 .history-group { margin-left: 8px; }
+
+.stage-toolbar .btn, .stage-toolbar label, .stage-toolbar .group, .stage-toolbar .bg-controls { white-space: nowrap; }

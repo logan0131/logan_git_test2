@@ -378,8 +378,9 @@ export default function App() {
     if (!plan) return map;
     for (const entry of plan.virtualBlends) for (const i of entry.targetPaletteIndices) map.set(i, { label: `VE${entry.virtualId}`, rgb: entry.displayRgb, recipe: blendRecipeText(entry) });
     for (const entry of plan.physicalOnly) {
-      const name = settings.filaments.names[entry.physicalExtruder - 1] ?? "";
-      for (const i of entry.targetPaletteIndices) map.set(i, { label: `E${entry.physicalExtruder}`, rgb: entry.physicalRgb, recipe: name });
+      const label = `E${entry.physicalExtruder}`;
+      const name = (settings.filaments.names[entry.physicalExtruder - 1] ?? "").trim();
+      for (const i of entry.targetPaletteIndices) map.set(i, { label, rgb: entry.physicalRgb, recipe: name && name !== label ? name : "" });
     }
     return map;
   }, [plan, settings.filaments.names]);

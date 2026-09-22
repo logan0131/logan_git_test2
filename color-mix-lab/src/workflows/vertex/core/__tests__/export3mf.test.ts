@@ -217,6 +217,28 @@ describe("D-2 printer config", () => {
     expect(config).toContain("extruders_count");
   });
 
+  it("keeps the template's printer kind (tool changer vs MMU)", async () => {
+    const configFor = async (semm: string) => {
+      const template = new JSZip();
+      template.file(
+        "Metadata/Slic3r_PE.config",
+        `; extruders_count = 5\n; single_extruder_multi_material = ${semm}\n; ooze_prevention = 1\n; wipe_tower = 1\n; filament_colour = #FFFFFF;#000000;#FF0000;#0000FF;#FFFF00\n`,
+      );
+      const templateArrayBuffer = (await template.generateAsync({ type: "uint8array" })).buffer as ArrayBuffer;
+      const result = await buildPrusa3mfBlob(exportOptions({ templateArrayBuffer, includePrinterConfig: true }));
+      return (await readZip(result.blob)).file("Metadata/Slic3r_PE.config")!.async("text");
+    };
+    // Prusa XL: ooze prevention + SEMM=1 is rejected by PrusaSlicer, so 0 must survive.
+    expect(await configFor("0")).toMatch(/^; single_extruder_multi_material = 0$/m);
+    expect(await configFor("1")).toMatch(/^; single_extruder_multi_material = 1$/m);
+    // A template without the key gets none invented either.
+    const bare = new JSZip();
+    bare.file("Metadata/Slic3r_PE.config", "; extruders_count = 5\n");
+    const bareBuffer = (await bare.generateAsync({ type: "uint8array" })).buffer as ArrayBuffer;
+    const bareResult = await buildPrusa3mfBlob(exportOptions({ templateArrayBuffer: bareBuffer, includePrinterConfig: true }));
+    expect(await (await readZip(bareResult.blob)).file("Metadata/Slic3r_PE.config")!.async("text")).not.toContain("single_extruder_multi_material");
+  });
+
   it("never invents a config when no template is loaded", async () => {
     const result = await buildPrusa3mfBlob(exportOptions({ includePrinterConfig: true }));
     expect((await readZip(result.blob)).file("Metadata/Slic3r_PE.config")).toBeNull();

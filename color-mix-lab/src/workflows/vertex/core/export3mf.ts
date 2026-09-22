@@ -1045,7 +1045,10 @@ function updateSlic3rConfigForPhysicalSlots(
   // resized. This avoids corrupting scalar filament fields or embedded G-code.
   values.set("extruders_count", String(targetCount));
   values.set("num_extruders", String(targetCount));
-  values.set("single_extruder_multi_material", "1");
+  // The printer kind stays whatever the template says: a tool changer (Prusa XL)
+  // has single_extruder_multi_material = 0, an MMU has 1.  Forcing 1 made
+  // PrusaSlicer refuse XL projects ("Ooze prevention is only supported with the
+  // wipe tower when 'single_extruder_multi_material' is off").
   values.set("printer_technology", "FFF");
   values.set("wipe_tower", "1");
 

@@ -94,9 +94,9 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     try {
       const stored = Number(window.localStorage.getItem("rodin-pipeline-sidebar-width"));
-      return Number.isFinite(stored) && stored >= 320 ? stored : 470;
+      return Number.isFinite(stored) && stored >= 320 ? stored : 600;
     } catch {
-      return 470;
+      return 600;
     }
   });
   const [splitterDragging, setSplitterDragging] = useState(false);
@@ -914,9 +914,9 @@ export default function App() {
           title={t("layout.splitter")}
           onPointerDown={startSplitterDrag}
           onDoubleClick={() => {
-            setSidebarWidth(470);
+            setSidebarWidth(600);
             try {
-              window.localStorage.setItem("rodin-pipeline-sidebar-width", "470");
+              window.localStorage.setItem("rodin-pipeline-sidebar-width", "600");
             } catch {
               // ignore
             }

@@ -16,7 +16,7 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
-:root { --topbar-h: 48px; --statusbar-h: 34px; --sidebar-w: 470px; }
+:root { --topbar-h: 48px; --statusbar-h: 34px; --sidebar-w: 600px; }
 body { background: var(--bg); color: var(--text); }
 button { font: inherit; }
 input, select { font: inherit; background: #0f141a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }

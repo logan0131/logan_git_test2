@@ -9,6 +9,7 @@
     "build": "npm run build --workspaces",
     "test": "npm test --workspace color-mix-lab",
     "dev:pipeline": "npm run dev --workspace rodin-pipeline",
-    "dev:cml": "npm run dev --workspace color-mix-lab"
+    "dev:cml": "npm run dev --workspace color-mix-lab",
+    "start": "npm run start --workspace rodin-pipeline"
   }
 }

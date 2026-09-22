@@ -14,6 +14,11 @@ Rodin → rodin-pipeline 앱 (불러오기 → 필라멘트 → 병합 → 컬�
 
 ## 실행 / How to run
 
+**가장 쉬운 방법 / easiest:** 저장소 폴더 안의 **`Rodin Pipeline 실행.command`**(Mac) 또는 **`Rodin Pipeline 실행.bat`**(Windows)을 더블클릭하세요.
+Node.js가 없으면 설치 페이지를 열어 주고, 처음 한 번은 패키지를 설치한 뒤 브라우저를 자동으로 엽니다. 창을 닫으면 앱이 꺼집니다.
+*Double-click the launcher in the repo folder. It installs packages on first run and opens the browser; closing the window stops the app.*
+
+
 필요한 것은 **Node.js 20 이상**뿐입니다 (https://nodejs.org). 터미널에서:
 *You only need **Node.js 20+**. In a terminal:*
 

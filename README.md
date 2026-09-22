@@ -42,6 +42,12 @@ npm run build         # 두 앱 빌드 / build both apps (rodin-pipeline/dist, c
 npx vite preview -w rodin-pipeline   # 빌드 결과 미리보기 / serve the built app
 ```
 
+### 작업 저장 / Saved work
+
+앱은 불러온 모델 파일과 현재 면 색(병합·묶음 색 바꾸기 결과)을 **브라우저(IndexedDB)에 자동 저장**하고, 다음에 켤 때 그대로 복원합니다. 상태 표시줄 오른쪽에 "자동 저장됨 시각"이 보이면 저장된 것입니다. 복원 후 **되돌리기**를 누르면 원본 색으로 돌아갑니다. 불러오기 섹션의 **새로 시작**은 모델과 저장된 작업을 지웁니다(필라멘트·병합 설정은 남음). PrusaSlicer 템플릿 3MF도 같은 방식으로 기억되며, 불러오기 섹션 아래 "PrusaSlicer 템플릿: 파일명 · 베드 크기" 줄에서 현재 물려 있는 템플릿을 확인할 수 있습니다. 저장은 브라우저·주소(포트)별로 따로 됩니다.
+
+The app autosaves the loaded model file and the current face colours (merges, patch recolours) in the browser's IndexedDB and restores them on the next start; the status bar shows "autosaved HH:MM" once stored. After a restore, **Undo** returns to the original colours; **Start over** in the Load section clears the model and the saved work (filament and merge settings stay). The PrusaSlicer template 3MF is remembered the same way, and the "PrusaSlicer template: name · bed" line in the Load section shows which one is attached. Storage is per browser and per address (port).
+
 ### 설치 없이 쓰기 (GitHub Pages) / Hosted version
 
 `.github/workflows/deploy-pipeline-pages.yml`이 `master`에 푸시될 때마다 `rodin-pipeline`을 빌드해 GitHub Pages에 올립니다.

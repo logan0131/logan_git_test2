@@ -165,3 +165,11 @@ table.grid tr.row-selected.hover-row td { background: rgba(255, 216, 79, 0.2); }
 .colour-option-sub { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
 .colour-option-empty { padding: 6px; }
 table.grid td .colour-select-trigger { min-width: 150px; }
+
+/* Work autosave indicator and template card */
+.statusbar .autosave { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.statusbar .autosave.failed { color: var(--warn); }
+.template-block > summary { cursor: pointer; font-size: 0.86rem; line-height: 1.4; }
+.template-block > summary.attached { color: var(--text); font-weight: 600; }
+.template-card { display: grid; gap: 6px; margin-top: 6px; }
+.work-state { font-weight: 500; }

@@ -43,7 +43,25 @@ import {
   sameLabelComponent,
   triangleAreaWeights,
 } from "./engine/mesh";
-import { downloadTextFile, idbDelete, idbGet, idbSet, loadStoredSettings, mergeSettings, settingsToJson, storeSettings } from "./engine/storage";
+import {
+  clearStoredWork,
+  downloadTextFile,
+  idbDelete,
+  idbGet,
+  idbSet,
+  isStoredWorkColours,
+  isStoredWorkFile,
+  loadStoredSettings,
+  mergeSettings,
+  packColours,
+  settingsToJson,
+  storeSettings,
+  unpackColours,
+  WORK_COLOURS_KEY,
+  WORK_FILE_KEY,
+  type StoredWorkColours,
+  type StoredWorkFile,
+} from "./engine/storage";
 import { MeshViewer, type HighlightOverlay } from "./ui/MeshViewer";
 import { LoadSection, type SourceInfo } from "./ui/LoadSection";
 import { FilamentSection } from "./ui/FilamentSection";
@@ -54,7 +72,7 @@ import { Swatch, pct } from "./ui/common";
 import { ColourSelect } from "./ui/ColourSelect";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.2.4";
+const APP_VERSION = "0.3.0";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -62,6 +80,20 @@ function baseName(name: string): string {
 
 function yieldToUi(ms = 30): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/** Where the current model came from; kept so the work autosave can store the file bytes. */
+interface WorkSource {
+  file: File;
+  kind: StoredWorkFile["kind"];
+  /** Palette a Nomad OBJ was snapped to (needed to re-import it identically). */
+  palette?: RGB[];
+}
+
+interface LoadedModel {
+  model: MeshModel;
+  info: SourceInfo;
+  status: string;
 }
 
 export default function App() {
@@ -101,7 +133,17 @@ export default function App() {
   });
   const [splitterDragging, setSplitterDragging] = useState(false);
   const adjacencyRef = useRef<{ triangles: MeshModel["triangles"]; adjacency: FaceAdjacency } | null>(null);
-  const modelFileRef = useRef<File | null>(null);
+  const modelFileRef = useRef<WorkSource | null>(null);
+  /** Face colours right after parsing the file (the "original" the undo stack bottoms out at). */
+  const originalColoursRef = useRef<RGB[] | null>(null);
+  /** Last colour array handed to the autosave effect (skips re-saving what is already stored). */
+  const lastSavedColoursRef = useRef<RGB[] | null>(null);
+  /** Increments on every model install/clear so stale async saves and restores are dropped. */
+  const loadGenerationRef = useRef(0);
+  const workRestoredRef = useRef(false);
+  const rememberWorkRef = useRef(settings.rememberWork);
+  const [workRestored, setWorkRestored] = useState(false);
+  const [autosave, setAutosave] = useState<{ state: "none" | "saving" | "saved" | "failed"; at: number | null }>({ state: "none", at: null });
 
   useEffect(() => {
     storeSettings(settings);
@@ -446,10 +488,65 @@ export default function App() {
   // ------------------------------------------------------------------
   // Loading
   // ------------------------------------------------------------------
-  function installModel(next: MeshModel, info: SourceInfo, file: File | null): void {
-    modelFileRef.current = file;
+  async function parseModelFile(file: File, kind: StoredWorkFile["kind"], nomadPalette?: RGB[]): Promise<LoadedModel> {
+    if (kind === "rodin") {
+      const result = await loadRodin3mf(file, file.name);
+      return {
+        model: result.model,
+        info: {
+          kind: "rodin",
+          fileName: file.name,
+          uniqueColours: result.model.stats.uniqueFaceColors,
+          rodin: {
+            paletteHex: result.paletteHex,
+            usedPaletteNumbers: result.usedPaletteNumbers,
+            warnings: result.warnings,
+            paletteSource: result.paletteSource,
+            paletteCount: result.stats.paletteCount,
+            usedColourCount: result.stats.usedColourCount,
+            unpaintedTriangleCount: result.stats.unpaintedTriangleCount,
+          },
+        },
+        status: t("status.rodinLoaded", {
+          faces: result.stats.triangleCount.toLocaleString(),
+          vertices: result.stats.vertexCount.toLocaleString(),
+          palette: result.stats.paletteCount,
+          used: result.stats.usedColourCount,
+        }),
+      };
+    }
+    if (kind === "nomad") {
+      const parsed = parseNomadObj(await file.text());
+      const result = applyNomadObjToModel(null, parsed, nomadPalette ?? [], file.name);
+      return {
+        model: result.model,
+        info: { kind: "nomad", fileName: file.name, uniqueColours: result.colourCount },
+        status: t("status.objLoaded", { faces: result.model.stats.triangleCount.toLocaleString(), colours: result.colourCount }),
+      };
+    }
+    const parsed = await parseObjFile(file, (p) => {
+      if (p.totalBytes && p.loadedBytes !== undefined) setBusy(t("busy.readingObjPct", { pct: Math.round((p.loadedBytes / p.totalBytes) * 100) }));
+    });
+    return {
+      model: parsed,
+      info: { kind: "obj", fileName: file.name, uniqueColours: parsed.stats.uniqueFaceColors },
+      status: t("status.objLoaded", { faces: parsed.stats.triangleCount.toLocaleString(), colours: parsed.stats.uniqueFaceColors }),
+    };
+  }
+
+  function installModel(
+    next: MeshModel,
+    info: SourceInfo,
+    source: WorkSource | null,
+    options?: { persist?: boolean; original?: RGB[]; history?: RGB[][]; restored?: boolean },
+  ): void {
+    loadGenerationRef.current += 1;
+    modelFileRef.current = source;
     adjacencyRef.current = null;
-    setHistory([]);
+    originalColoursRef.current = options?.original ?? next.triangleColors;
+    lastSavedColoursRef.current = next.triangleColors;
+    setHistory(options?.history ?? []);
+    setWorkRestored(options?.restored ?? false);
     setMergeReport(null);
     setNomadReport(null);
     setPicked(null);
@@ -459,53 +556,160 @@ export default function App() {
     setSourceInfo(info);
     setSettings((prev) => ({ ...prev, manualPhysical: {}, export: { ...prev.export, fileName: "" } }));
     setFitNonce((n) => n + 1);
+    if (options?.persist === false) return;
+    if (source && rememberWorkRef.current) void persistWorkFile(source, loadGenerationRef.current);
+    else setAutosave({ state: "none", at: null });
   }
 
   async function onModelFile(file: File): Promise<void> {
-    const lower = file.name.toLowerCase();
-    setBusy(lower.endsWith(".3mf") ? t("busy.readingRodin") : t("busy.readingObj"));
+    const kind: StoredWorkFile["kind"] = file.name.toLowerCase().endsWith(".3mf") ? "rodin" : "obj";
+    setBusy(kind === "rodin" ? t("busy.readingRodin") : t("busy.readingObj"));
     await yieldToUi();
     try {
-      if (lower.endsWith(".3mf")) {
-        const result = await loadRodin3mf(file, file.name);
-        installModel(
-          result.model,
-          {
-            kind: "rodin",
-            fileName: file.name,
-            uniqueColours: result.model.stats.uniqueFaceColors,
-            rodin: {
-              paletteHex: result.paletteHex,
-              usedPaletteNumbers: result.usedPaletteNumbers,
-              warnings: result.warnings,
-              paletteSource: result.paletteSource,
-              paletteCount: result.stats.paletteCount,
-              usedColourCount: result.stats.usedColourCount,
-              unpaintedTriangleCount: result.stats.unpaintedTriangleCount,
-            },
-          },
-          file,
-        );
-        setStatus(
-          t("status.rodinLoaded", {
-            faces: result.stats.triangleCount.toLocaleString(),
-            vertices: result.stats.vertexCount.toLocaleString(),
-            palette: result.stats.paletteCount,
-            used: result.stats.usedColourCount,
-          }),
-        );
-      } else {
-        const parsed = await parseObjFile(file, (p) => {
-          if (p.totalBytes && p.loadedBytes !== undefined) setBusy(t("busy.readingObjPct", { pct: Math.round((p.loadedBytes / p.totalBytes) * 100) }));
-        });
-        installModel(parsed, { kind: "obj", fileName: file.name, uniqueColours: parsed.stats.uniqueFaceColors }, file);
-        setStatus(t("status.objLoaded", { faces: parsed.stats.triangleCount.toLocaleString(), colours: parsed.stats.uniqueFaceColors }));
-      }
+      const loaded = await parseModelFile(file, kind);
+      installModel(loaded.model, loaded.info, { file, kind });
+      setStatus(loaded.status);
     } catch (err) {
       setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Work autosave (IndexedDB): the model file bytes + the current face colours.
+  // ------------------------------------------------------------------
+  async function persistWorkFile(source: WorkSource, generation: number): Promise<boolean> {
+    setAutosave({ state: "saving", at: null });
+    try {
+      // The stored colours belong to the previous model; drop them before the new file lands.
+      await idbDelete(WORK_COLOURS_KEY);
+      const buffer = await source.file.arrayBuffer();
+      if (generation !== loadGenerationRef.current) return false;
+      const record: StoredWorkFile = {
+        name: source.file.name,
+        kind: source.kind,
+        buffer,
+        palette: source.palette ? packColours(source.palette) : undefined,
+        savedAt: Date.now(),
+      };
+      const ok = await idbSet(WORK_FILE_KEY, record);
+      if (generation === loadGenerationRef.current) setAutosave({ state: ok ? "saved" : "failed", at: Date.now() });
+      return ok;
+    } catch {
+      if (generation === loadGenerationRef.current) setAutosave({ state: "failed", at: null });
+      return false;
+    }
+  }
+
+  async function persistWorkColours(colours: RGB[], generation: number): Promise<void> {
+    setAutosave({ state: "saving", at: null });
+    let ok = true;
+    if (colours === originalColoursRef.current) await idbDelete(WORK_COLOURS_KEY);
+    else {
+      const record: StoredWorkColours = { faceCount: colours.length, colours: packColours(colours), savedAt: Date.now() };
+      ok = await idbSet(WORK_COLOURS_KEY, record);
+    }
+    if (generation === loadGenerationRef.current) setAutosave({ state: ok ? "saved" : "failed", at: Date.now() });
+  }
+
+  // Debounced save of the current colours whenever they change (merge, patch recolour, undo, Nomad import).
+  useEffect(() => {
+    if (!model) return;
+    if (lastSavedColoursRef.current === model.triangleColors) return;
+    const colours = model.triangleColors;
+    lastSavedColoursRef.current = colours;
+    if (!settings.rememberWork) return;
+    const generation = loadGenerationRef.current;
+    const timer = window.setTimeout(() => void persistWorkColours(colours, generation), 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, settings.rememberWork]);
+
+  // Turning autosave off wipes the stored work; turning it on stores the current work right away.
+  useEffect(() => {
+    const was = rememberWorkRef.current;
+    rememberWorkRef.current = settings.rememberWork;
+    if (was === settings.rememberWork) return;
+    if (!settings.rememberWork) {
+      void clearStoredWork();
+      setAutosave({ state: "none", at: null });
+      return;
+    }
+    const source = modelFileRef.current;
+    if (!source || !model) return;
+    const generation = loadGenerationRef.current;
+    void (async () => {
+      if (!(await persistWorkFile(source, generation))) return;
+      if (model.triangleColors !== originalColoursRef.current) await persistWorkColours(model.triangleColors, generation);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.rememberWork]);
+
+  // Restore the saved work once on startup.
+  useEffect(() => {
+    if (workRestoredRef.current) return;
+    workRestoredRef.current = true;
+    if (!settings.rememberWork) return;
+    void restoreWork();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function restoreWork(): Promise<void> {
+    const stored = await idbGet<unknown>(WORK_FILE_KEY);
+    if (!isStoredWorkFile(stored) || loadGenerationRef.current !== 0) return;
+    setBusy(t("busy.restoringWork"));
+    await yieldToUi();
+    try {
+      const storedColours = await idbGet<unknown>(WORK_COLOURS_KEY);
+      const file = new File([stored.buffer], stored.name);
+      const nomadPalette = stored.palette ? (unpackColours(stored.palette, Math.floor(stored.palette.length / 3)) ?? undefined) : undefined;
+      const loaded = await parseModelFile(file, stored.kind, nomadPalette);
+      if (loadGenerationRef.current !== 0) return;
+      const original = loaded.model.triangleColors;
+      const colours =
+        isStoredWorkColours(storedColours) && storedColours.faceCount === loaded.model.triangles.length
+          ? unpackColours(storedColours.colours, storedColours.faceCount)
+          : null;
+      const restoredModel = colours
+        ? { ...loaded.model, triangleColors: colours, stats: { ...loaded.model.stats, uniqueFaceColors: countUniqueColours(colours) } }
+        : loaded.model;
+      installModel(
+        restoredModel,
+        { ...loaded.info, uniqueColours: restoredModel.stats.uniqueFaceColors },
+        { file, kind: stored.kind, palette: nomadPalette },
+        { persist: false, original, history: colours ? [original] : [], restored: true },
+      );
+      const savedAt = colours && isStoredWorkColours(storedColours) ? storedColours.savedAt : stored.savedAt;
+      setAutosave({ state: "saved", at: Number.isFinite(savedAt) ? savedAt : Date.now() });
+      setStatus(t("status.workRestored", { name: stored.name, info: colours ? t("status.workRestoredColours") : t("status.workRestoredOriginal") }));
+    } catch (err) {
+      setStatus(t("status.workRestoreFailed", { message: err instanceof Error ? err.message : String(err) }));
+      void clearStoredWork();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function clearWork(): void {
+    if (model && !window.confirm(t("load.newWorkConfirm"))) return;
+    loadGenerationRef.current += 1;
+    modelFileRef.current = null;
+    adjacencyRef.current = null;
+    originalColoursRef.current = null;
+    lastSavedColoursRef.current = null;
+    setModel(null);
+    setSourceInfo(null);
+    setHistory([]);
+    setWorkRestored(false);
+    setMergeReport(null);
+    setNomadReport(null);
+    setPicked(null);
+    setSelectedHexes([]);
+    setHoverHex(null);
+    setAutosave({ state: "none", at: null });
+    void clearStoredWork();
+    setStatus(t("status.workCleared"));
   }
 
   async function onTemplateFile(file: File): Promise<void> {
@@ -724,7 +928,11 @@ export default function App() {
         });
         applyColours(model, next);
       } else {
-        installModel(result.model, { kind: "nomad", fileName: file.name, uniqueColours: result.colourCount }, file);
+        installModel(
+          result.model,
+          { kind: "nomad", fileName: file.name, uniqueColours: result.colourCount },
+          { file, kind: "nomad", palette: paletteRgb.length > 0 ? paletteRgb : (parsed.paletteHint ?? []) },
+        );
       }
       const message = t("nomad.applied", {
         mode: result.mode === "colours-only" ? t("nomad.coloursOnly") : t("nomad.fullReload"),
@@ -785,6 +993,17 @@ export default function App() {
   }
 
   const isBusy = busy !== null;
+  const autosaveLabel = !settings.rememberWork
+    ? t("autosave.off")
+    : autosave.state === "saving"
+      ? t("autosave.saving")
+      : autosave.state === "failed"
+        ? t("autosave.failed")
+        : autosave.state === "saved"
+          ? t("autosave.saved", {
+              time: new Date(autosave.at ?? Date.now()).toLocaleTimeString(lang === "ko" ? "ko-KR" : "en-GB", { hour: "2-digit", minute: "2-digit" }),
+            })
+          : "";
   const modeLabel: Record<PreviewMode, string> = { source: t("view.source"), palette: t("view.palette"), print: t("view.print") };
   const viewLabels: Array<[ViewName, string]> = [
     ["front", t("view.front")],
@@ -845,8 +1064,14 @@ export default function App() {
             onClearTemplate={clearTemplate}
             palette={palette}
             areaByIndex={areaByIndex}
+            paletteSettings={settings.palette}
+            onPaletteSettingsChange={(next) => patchSettings("palette", next)}
             rememberTemplate={settings.rememberTemplate}
             onRememberTemplate={(next) => patchSettings("rememberTemplate", next)}
+            rememberWork={settings.rememberWork}
+            onRememberWork={(next) => patchSettings("rememberWork", next)}
+            workState={model ? { restored: workRestored, undoSteps: history.length } : null}
+            onClearWork={clearWork}
           />
           <FilamentSection
             settings={settings.filaments}
@@ -1035,6 +1260,11 @@ export default function App() {
       <footer className={`statusbar${isBusy ? " busy" : ""}`} role="status" aria-live="polite">
         <span className="label">{isBusy ? busy : t("status.label")}</span>
         <span className="message" title={status}>{status}</span>
+        {model && autosaveLabel && (
+          <span className={`autosave${autosave.state === "failed" ? " failed" : ""}`} title={t("load.rememberWork")}>
+            {autosaveLabel}
+          </span>
+        )}
       </footer>
     </div>
     </LangContext.Provider>

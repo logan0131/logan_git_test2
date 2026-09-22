@@ -86,6 +86,8 @@ export interface PipelineSettings {
   filamentList: FilamentListEntry[];
   /** Keep the loaded PrusaSlicer template in the browser for next time. */
   rememberTemplate: boolean;
+  /** Autosave the loaded model and its current face colours in the browser. */
+  rememberWork: boolean;
   filaments: FilamentSettings;
   palette: PaletteSettings;
   merge: MergeSettings;
@@ -108,6 +110,7 @@ export const DEFAULT_SETTINGS: PipelineSettings = {
   version: 1,
   filamentList: [],
   rememberTemplate: true,
+  rememberWork: true,
   filaments: {
     count: 5,
     hex: ["#FFFFFF", "#111111", "#00B7EB", "#E4007C", "#FFE600", "#FF0000", "#00FF00", "#0000FF"],
@@ -135,7 +138,7 @@ export const DEFAULT_SETTINGS: PipelineSettings = {
     mixPriority: "accurate",
     mappingStrategy: "closest",
     colourDifferenceMetric: "ciede2000",
-    previewLightnessOffset: -36,
+    previewLightnessOffset: 0,
     purePhysicalThreshold: 0.985,
     physicalDirectDeltaE: 6,
     autoPhysicalDirect: true,

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, type PipelineSettings } from "./types";
+import type { RGB } from "@core/types";
 
 const STORAGE_KEY = "rodin-pipeline-settings-v1";
 
@@ -21,6 +22,7 @@ export function mergeSettings(stored: unknown): PipelineSettings {
         isRecord(entry) && typeof entry.name === "string" && typeof entry.hex === "string" && /^#[0-9a-fA-F]{6}$/.test(entry.hex),
     );
   if (typeof stored.rememberTemplate === "boolean") out.rememberTemplate = stored.rememberTemplate;
+  if (typeof stored.rememberWork === "boolean") out.rememberWork = stored.rememberWork;
   if (isRecord(stored.manualPhysical)) out.manualPhysical = stored.manualPhysical as PipelineSettings["manualPhysical"];
   // Keep fixed-length arrays well formed.
   const hex = Array.isArray(out.filaments.hex) ? out.filaments.hex : [];
@@ -132,4 +134,65 @@ export async function idbDelete(key: string): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+// ---------------------------------------------------------------------------
+// Work autosave: the loaded model file plus the current face colours.
+// ---------------------------------------------------------------------------
+
+export const WORK_FILE_KEY = "work-file";
+export const WORK_COLOURS_KEY = "work-colours";
+
+export interface StoredWorkFile {
+  /** Original file name, e.g. "typhoeus.3mf". */
+  name: string;
+  /** "rodin" (3MF), "obj" (vertex-colour OBJ) or "nomad" (OBJ imported as a full reload). */
+  kind: "rodin" | "obj" | "nomad";
+  /** Raw file bytes. */
+  buffer: ArrayBuffer;
+  /** Palette used for snapping a Nomad OBJ (3 bytes per colour); only for kind "nomad". */
+  palette?: Uint8Array;
+  savedAt: number;
+}
+
+export interface StoredWorkColours {
+  faceCount: number;
+  /** 3 bytes per face, in face order. */
+  colours: Uint8Array;
+  savedAt: number;
+}
+
+export function packColours(colours: ArrayLike<RGB>): Uint8Array {
+  const out = new Uint8Array(colours.length * 3);
+  for (let i = 0; i < colours.length; i++) {
+    const rgb = colours[i];
+    out[i * 3] = rgb[0];
+    out[i * 3 + 1] = rgb[1];
+    out[i * 3 + 2] = rgb[2];
+  }
+  return out;
+}
+
+export function unpackColours(packed: Uint8Array, faceCount: number): RGB[] | null {
+  if (packed.length !== faceCount * 3) return null;
+  const out: RGB[] = new Array(faceCount);
+  for (let i = 0; i < faceCount; i++) out[i] = [packed[i * 3], packed[i * 3 + 1], packed[i * 3 + 2]];
+  return out;
+}
+
+export function isStoredWorkFile(value: unknown): value is StoredWorkFile {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    (value.kind === "rodin" || value.kind === "obj" || value.kind === "nomad") &&
+    value.buffer instanceof ArrayBuffer
+  );
+}
+
+export function isStoredWorkColours(value: unknown): value is StoredWorkColours {
+  return isRecord(value) && typeof value.faceCount === "number" && value.colours instanceof Uint8Array;
+}
+
+export async function clearStoredWork(): Promise<void> {
+  await Promise.all([idbDelete(WORK_FILE_KEY), idbDelete(WORK_COLOURS_KEY)]);
 }

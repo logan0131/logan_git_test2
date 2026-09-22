@@ -420,6 +420,8 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
       pendingMove = null;
       if (!move) return;
       const hit = gpuPick(state, move.x, move.y);
+      // Only the brush circle is shown while the pointer is on the surface.
+      if (brushRef.current && !eyedropperRef.current) renderer.domElement.style.cursor = hit ? "none" : "crosshair";
       if (move.drag) callbacksRef.current.onBrushDrag?.(hit);
       else callbacksRef.current.onBrushHover?.(hit);
     };
@@ -460,7 +462,10 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
     };
     const onPointerLeave = () => {
       pendingMove = null;
-      if (brushRef.current) callbacksRef.current.onBrushHover?.(null);
+      if (brushRef.current) {
+        callbacksRef.current.onBrushHover?.(null);
+        if (!eyedropperRef.current) renderer.domElement.style.cursor = "crosshair";
+      }
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);

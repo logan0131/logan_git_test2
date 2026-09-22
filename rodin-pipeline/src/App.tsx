@@ -78,7 +78,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.3";
+const APP_VERSION = "0.4.4";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -1163,6 +1163,30 @@ export default function App() {
     });
   }
 
+  // Brush size bounds follow the model size; the slider is logarithmic.
+  const brushBounds = useMemo(() => {
+    const radius = model ? faceGeometryFor(model).radius : 1;
+    return { min: radius * 0.003, max: radius * 0.6 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geometryTriangles]);
+  const brushSliderValue = Math.round(1000 * Math.max(0, Math.min(1, Math.log(brushRadius / brushBounds.min) / Math.log(brushBounds.max / brushBounds.min))));
+  const setBrushRadiusClamped = (next: number) => setBrushRadius(Number(Math.max(brushBounds.min, Math.min(brushBounds.max, next)).toPrecision(3)));
+
+  // [ and ] shrink / grow the brush while brush mode is on.
+  useEffect(() => {
+    if (!brushMode) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "[" && event.key !== "]") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      setBrushRadiusClamped(brushRadius * (event.key === "[" ? 0.8 : 1.25));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brushMode, brushRadius, brushBounds]);
+
   // Ctrl/Cmd+Z undoes the last colour change.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1673,7 +1697,8 @@ export default function App() {
                 {t("brush.eyedropper")}
               </button>
               <span>{t("brush.size")}</span>
-              <NumberField value={brushRadius} min={0.01} max={1000} step={Math.max(0.01, Number((brushRadius / 5).toPrecision(1)))} onChange={(v) => setBrushRadius(Math.max(0.01, v))} />
+              <NumberField value={brushRadius} min={0.001} max={10000} step={Math.max(0.001, Number((brushRadius / 5).toPrecision(1)))} onChange={(v) => setBrushRadiusClamped(v)} />
+              <span className="muted">{t("brush.keys")}</span>
               <label className="inline" style={{ gap: 6 }}>
                 <input type="checkbox" checked={brushMaskOnly} onChange={(e) => setBrushMaskOnly(e.target.checked)} /> {t("brush.maskOnly")}
               </label>
@@ -1746,6 +1771,21 @@ export default function App() {
             </div>
           )}
           <div className={`viewers${split ? " split" : ""}${showMap ? " with-map" : ""}`}>
+            {model && brushMode && (
+              <div className="brush-size-overlay" title={t("brush.keys")}>
+                <span>{t("brush.sizeShort")}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  value={brushSliderValue}
+                  onChange={(e) => setBrushRadiusClamped(brushBounds.min * Math.pow(brushBounds.max / brushBounds.min, Number(e.target.value) / 1000))}
+                />
+                <b>{brushRadius}</b>
+                <span className="muted">{t("brush.keys")}</span>
+              </div>
+            )}
             {split ? (
               <>
                 <MeshViewer ref={viewerRef0} positions={positions} colours={paletteColours} label={t("view.paletteLabel")} {...viewerCommon(0)} />

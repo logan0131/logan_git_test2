@@ -92,7 +92,7 @@ table.grid tr.head td { font-weight: 700; }
 .stage-toolbar .group { display: inline-flex; gap: 4px; align-items: center; }
 .stage-toolbar .group > span { color: var(--muted); font-size: 0.84rem; margin-right: 2px; }
 .btn.active { background: var(--accent); border-color: var(--accent); color: white; }
-.viewers { display: grid; gap: 8px; padding: 8px; min-height: 0; flex: 1 1 auto; }
+.viewers { position: relative; display: grid; gap: 8px; padding: 8px; min-height: 0; flex: 1 1 auto; }
 .viewers.split { grid-template-columns: 1fr 1fr; }
 .mesh-viewer { position: relative; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #2b3138; display: grid; }
 .mesh-viewer-host { position: absolute; inset: 0; }
@@ -224,3 +224,7 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 
 .btn.eyedropper-toggle.active { background: var(--accent); border-color: var(--accent); color: white; }
 .colour-map.eyedropping .colour-map-host canvas { cursor: cell; }
+
+.brush-size-overlay { position: absolute; left: 20px; bottom: 20px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 138, 61, 0.5); font-size: 0.82rem; }
+.brush-size-overlay input[type="range"] { width: 170px; accent-color: #ff8a3d; }
+.brush-size-overlay b { min-width: 42px; text-align: right; }

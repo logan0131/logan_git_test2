@@ -44,6 +44,10 @@ npx vite preview -w rodin-pipeline   # 빌드 결과 미리보기 / serve the bu
 
 ### 작업 저장 / Saved work
 
+**실행 파일(.command/.bat)이나 `npm start`로 켠 경우** 설정(필라멘트, 병합 설정 등)과 자동 저장된 작업(모델 파일 + 현재 색), 템플릿 3MF는 `rodin-pipeline/user-data/` 폴더에 파일로 저장됩니다. 브라우저를 바꾸거나 포트가 달라져도 그대로이며, 상태 표시줄 오른쪽에 "저장: 폴더"라고 표시됩니다. 이 폴더를 통째로 백업하거나 다른 컴퓨터로 옮길 수 있습니다. GitHub Pages 등 다른 곳에서 열면 아래처럼 브라우저 저장소를 씁니다("저장: 브라우저"). 개발 서버 포트는 5173으로 고정되어 있고, 이미 켜져 있으면 실행 파일이 새로 켜지 않고 그 주소를 브라우저로 엽니다.
+
+When started through the launcher or `npm start`, settings, the autosaved work (model file + current colours) and the template 3MF are stored as files in `rodin-pipeline/user-data/`, independent of browser and port; the status bar shows "storage: folder". Back up or move that folder as a whole. Anywhere else (e.g. GitHub Pages) the browser storage described below is used ("storage: browser"). The dev server port is fixed at 5173, and the launcher opens the existing instance instead of starting a second one.
+
 앱은 불러온 모델 파일과 현재 면 색(병합·묶음 색 바꾸기 결과)을 **브라우저(IndexedDB)에 자동 저장**하고, 다음에 켤 때 그대로 복원합니다. 상태 표시줄 오른쪽에 "자동 저장됨 시각"이 보이면 저장된 것입니다. 복원 후 **되돌리기**를 누르면 원본 색으로 돌아갑니다. 불러오기 섹션의 **새로 시작**은 모델과 저장된 작업을 지웁니다(필라멘트·병합 설정은 남음). PrusaSlicer 템플릿 3MF도 같은 방식으로 기억되며, 불러오기 섹션 아래 "PrusaSlicer 템플릿: 파일명 · 베드 크기" 줄에서 현재 물려 있는 템플릿을 확인할 수 있습니다. 저장은 브라우저·주소(포트)별로 따로 됩니다.
 
 The app autosaves the loaded model file and the current face colours (merges, patch recolours) in the browser's IndexedDB and restores them on the next start; the status bar shows "autosaved HH:MM" once stored. After a restore, **Undo** returns to the original colours; **Start over** in the Load section clears the model and the saved work (filament and merge settings stay). The PrusaSlicer template 3MF is remembered the same way, and the "PrusaSlicer template: name · bed" line in the Load section shows which one is attached. Storage is per browser and per address (port).

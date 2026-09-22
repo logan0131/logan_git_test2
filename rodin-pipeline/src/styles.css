@@ -168,7 +168,8 @@ table.grid tr.row-selected.hover-row td { background: rgba(255, 216, 79, 0.2); }
 table.grid td .colour-select-trigger { min-width: 150px; }
 
 /* Work autosave indicator and template card */
-.statusbar .autosave { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.statusbar .storage-mode { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.statusbar .autosave { flex: 0 0 auto; margin-left: 10px; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 .statusbar .autosave.failed { color: var(--warn); }
 .template-block > summary { cursor: pointer; font-size: 0.86rem; line-height: 1.4; }
 .template-block > summary.attached { color: var(--text); font-weight: 600; }

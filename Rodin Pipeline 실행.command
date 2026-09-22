@@ -43,9 +43,21 @@ npm install --no-audit --no-fund || {
   exit 1
 }
 
+# Already running (e.g. an earlier window is still open)? Just open the browser there.
+# The port is fixed so the browser address (and everything saved for it) never changes.
+if lsof -nP -iTCP:5173 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo
+  echo "앱이 이미 켜져 있습니다. 브라우저에서 엽니다: http://localhost:5173/"
+  echo "The app is already running; opening it in the browser: http://localhost:5173/"
+  open "http://localhost:5173/"
+  sleep 2
+  exit 0
+fi
+
 echo
 echo "앱을 켭니다. 브라우저가 자동으로 열립니다 (안 열리면 http://localhost:5173/ 로 접속)."
 echo "Starting the app; the browser opens automatically (or go to http://localhost:5173/)."
+echo "설정과 작업은 rodin-pipeline/user-data 폴더에 저장됩니다. / Settings and work are saved in rodin-pipeline/user-data."
 echo "이 창을 닫으면 앱이 꺼집니다. / Closing this window stops the app."
 echo
 npm start

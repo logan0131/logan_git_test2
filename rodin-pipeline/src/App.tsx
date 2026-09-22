@@ -46,17 +46,20 @@ import {
   triangleAreaWeights,
 } from "./engine/mesh";
 import {
-  clearStoredWork,
+  clearStoredWorkEverywhere,
+  dataDelete,
+  dataGet,
+  dataSet,
   downloadTextFile,
-  idbDelete,
-  idbGet,
-  idbSet,
   isStoredWorkColours,
   isStoredWorkFile,
+  loadServerSettings,
   loadStoredSettings,
+  localServerAvailable,
   mergeSettings,
   packColours,
   settingsToJson,
+  storeServerSettings,
   storeSettings,
   unpackColours,
   WORK_COLOURS_KEY,
@@ -79,7 +82,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.5";
+const APP_VERSION = "0.4.6";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -222,8 +225,33 @@ export default function App() {
   const [workRestored, setWorkRestored] = useState(false);
   const [autosave, setAutosave] = useState<{ state: "none" | "saving" | "saved" | "failed"; at: number | null }>({ state: "none", at: null });
 
+  // Settings live in the browser and, when the app runs from its own local server, as
+  // rodin-pipeline/user-data/settings (survives port, browser and profile changes).
+  const settingsSyncReadyRef = useRef(false);
+  const [storageMode, setStorageMode] = useState<"browser" | "folder">("browser");
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const available = await localServerAvailable();
+      if (cancelled) return;
+      if (available) {
+        const fromServer = await loadServerSettings();
+        if (cancelled) return;
+        setStorageMode("folder");
+        if (fromServer) setSettings(fromServer);
+        else await storeServerSettings(loadStoredSettings());
+      }
+      settingsSyncReadyRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     storeSettings(settings);
+    if (!settingsSyncReadyRef.current) return;
+    const timer = window.setTimeout(() => void storeServerSettings(settings), 300);
+    return () => window.clearTimeout(timer);
   }, [settings]);
 
   const patchSettings = useCallback(<K extends keyof PipelineSettings>(key: K, value: PipelineSettings[K]) => {
@@ -653,7 +681,7 @@ export default function App() {
     templateRestoredRef.current = true;
     if (!settings.rememberTemplate) return;
     void (async () => {
-      const stored = await idbGet<{ name: string; buffer: ArrayBuffer }>("template");
+      const stored = await dataGet<{ name: string; buffer: ArrayBuffer }>("template");
       if (!stored || !(stored.buffer instanceof ArrayBuffer)) return;
       try {
         const file = new File([stored.buffer], stored.name, { type: "model/3mf" });
@@ -666,7 +694,7 @@ export default function App() {
         }
         setStatus(t("status.templateRestored", { name: stored.name }));
       } catch {
-        void idbDelete("template");
+        void dataDelete("template");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,15 +702,15 @@ export default function App() {
 
   useEffect(() => {
     if (!settings.rememberTemplate) {
-      void idbDelete("template");
+      void dataDelete("template");
       return;
     }
-    if (template) void idbSet("template", { name: template.info.fileName, buffer: template.buffer });
+    if (template) void dataSet("template", { name: template.info.fileName, buffer: template.buffer });
   }, [settings.rememberTemplate, template]);
 
   function clearTemplate(): void {
     setTemplate(null);
-    void idbDelete("template");
+    void dataDelete("template");
   }
 
   // Suggest merge flags for palette colours that have none yet.
@@ -839,7 +867,7 @@ export default function App() {
     setAutosave({ state: "saving", at: null });
     try {
       // The stored colours belong to the previous model; drop them before the new file lands.
-      await idbDelete(WORK_COLOURS_KEY);
+      await dataDelete(WORK_COLOURS_KEY);
       const buffer = await source.file.arrayBuffer();
       if (generation !== loadGenerationRef.current) return false;
       const record: StoredWorkFile = {
@@ -849,7 +877,7 @@ export default function App() {
         palette: source.palette ? packColours(source.palette) : undefined,
         savedAt: Date.now(),
       };
-      const ok = await idbSet(WORK_FILE_KEY, record);
+      const ok = await dataSet(WORK_FILE_KEY, record);
       if (generation === loadGenerationRef.current) setAutosave({ state: ok ? "saved" : "failed", at: Date.now() });
       return ok;
     } catch {
@@ -861,10 +889,10 @@ export default function App() {
   async function persistWorkColours(colours: RGB[], generation: number): Promise<void> {
     setAutosave({ state: "saving", at: null });
     let ok = true;
-    if (colours === originalColoursRef.current) await idbDelete(WORK_COLOURS_KEY);
+    if (colours === originalColoursRef.current) await dataDelete(WORK_COLOURS_KEY);
     else {
       const record: StoredWorkColours = { faceCount: colours.length, colours: packColours(colours), savedAt: Date.now() };
-      ok = await idbSet(WORK_COLOURS_KEY, record);
+      ok = await dataSet(WORK_COLOURS_KEY, record);
     }
     if (generation === loadGenerationRef.current) setAutosave({ state: ok ? "saved" : "failed", at: Date.now() });
   }
@@ -888,7 +916,7 @@ export default function App() {
     rememberWorkRef.current = settings.rememberWork;
     if (was === settings.rememberWork) return;
     if (!settings.rememberWork) {
-      void clearStoredWork();
+      void clearStoredWorkEverywhere();
       setAutosave({ state: "none", at: null });
       return;
     }
@@ -912,12 +940,12 @@ export default function App() {
   }, []);
 
   async function restoreWork(): Promise<void> {
-    const stored = await idbGet<unknown>(WORK_FILE_KEY);
+    const stored = await dataGet<unknown>(WORK_FILE_KEY);
     if (!isStoredWorkFile(stored) || loadGenerationRef.current !== 0) return;
     setBusy(t("busy.restoringWork"));
     await yieldToUi();
     try {
-      const storedColours = await idbGet<unknown>(WORK_COLOURS_KEY);
+      const storedColours = await dataGet<unknown>(WORK_COLOURS_KEY);
       const file = new File([stored.buffer], stored.name);
       const nomadPalette = stored.palette ? (unpackColours(stored.palette, Math.floor(stored.palette.length / 3)) ?? undefined) : undefined;
       const loaded = await parseModelFile(file, stored.kind, nomadPalette);
@@ -941,7 +969,7 @@ export default function App() {
       setStatus(t("status.workRestored", { name: stored.name, info: colours ? t("status.workRestoredColours") : t("status.workRestoredOriginal") }));
     } catch (err) {
       setStatus(t("status.workRestoreFailed", { message: err instanceof Error ? err.message : String(err) }));
-      void clearStoredWork();
+      void clearStoredWorkEverywhere();
     } finally {
       setBusy(null);
     }
@@ -968,7 +996,7 @@ export default function App() {
     setSelectedHexes([]);
     setHoverHex(null);
     setAutosave({ state: "none", at: null });
-    void clearStoredWork();
+    void clearStoredWorkEverywhere();
     setStatus(t("status.workCleared"));
   }
 
@@ -1872,6 +1900,9 @@ export default function App() {
       <footer className={`statusbar${isBusy ? " busy" : ""}`} role="status" aria-live="polite">
         <span className="label">{isBusy ? busy : t("status.label")}</span>
         <span className="message" title={status}>{status}</span>
+        <span className="storage-mode" title={t(storageMode === "folder" ? "storage.folderHint" : "storage.browserHint")}>
+          {t(storageMode === "folder" ? "storage.folder" : "storage.browser")}
+        </span>
         {model && autosaveLabel && (
           <span className={`autosave${autosave.state === "failed" ? " failed" : ""}`} title={t("load.rememberWork")}>
             {autosaveLabel}

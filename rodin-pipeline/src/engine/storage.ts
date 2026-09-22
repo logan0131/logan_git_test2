@@ -196,3 +196,170 @@ export function isStoredWorkColours(value: unknown): value is StoredWorkColours 
 export async function clearStoredWork(): Promise<void> {
   await Promise.all([idbDelete(WORK_FILE_KEY), idbDelete(WORK_COLOURS_KEY)]);
 }
+
+// ---------------------------------------------------------------------------
+// Local data store: files served by the app's own dev/preview server when it is
+// running (rodin-pipeline/user-data/), otherwise IndexedDB in the browser.
+// ---------------------------------------------------------------------------
+
+const MAGIC = "RDN1";
+let serverProbe: Promise<boolean> | null = null;
+
+function dataUrl(key: string): string {
+  return new URL(`__rodin/data/${key}`, document.baseURI).toString();
+}
+
+/** True when the page is served by the Rodin Pipeline dev/preview server (cached). */
+export function localServerAvailable(): Promise<boolean> {
+  if (!serverProbe) {
+    serverProbe = (async () => {
+      try {
+        const res = await fetch(new URL("__rodin/ping", document.baseURI).toString(), { cache: "no-store" });
+        return res.ok && (await res.text()).trim() === "ok";
+      } catch {
+        return false;
+      }
+    })();
+  }
+  return serverProbe;
+}
+
+function packRecord(header: Record<string, unknown>, payload: Uint8Array): Uint8Array {
+  const headerBytes = new TextEncoder().encode(JSON.stringify(header));
+  const out = new Uint8Array(8 + headerBytes.length + payload.length);
+  out.set(new TextEncoder().encode(MAGIC), 0);
+  new DataView(out.buffer).setUint32(4, headerBytes.length, true);
+  out.set(headerBytes, 8);
+  out.set(payload, 8 + headerBytes.length);
+  return out;
+}
+
+function unpackRecord(buffer: ArrayBuffer): { header: Record<string, unknown>; payload: Uint8Array } | null {
+  if (buffer.byteLength < 8) return null;
+  const bytes = new Uint8Array(buffer);
+  if (new TextDecoder().decode(bytes.subarray(0, 4)) !== MAGIC) return null;
+  const headerLength = new DataView(buffer).getUint32(4, true);
+  if (8 + headerLength > buffer.byteLength) return null;
+  const header = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + headerLength))) as Record<string, unknown>;
+  return { header, payload: bytes.slice(8 + headerLength) };
+}
+
+/** Serialises the records the app stores (template, work file, work colours). */
+function serialiseRecord(value: unknown): Uint8Array | null {
+  if (isStoredWorkFile(value)) {
+    const palette = value.palette ?? new Uint8Array(0);
+    const payload = new Uint8Array(palette.length + value.buffer.byteLength);
+    payload.set(palette, 0);
+    payload.set(new Uint8Array(value.buffer), palette.length);
+    return packRecord({ type: "work-file", name: value.name, kind: value.kind, savedAt: value.savedAt, paletteLength: palette.length }, payload);
+  }
+  if (isStoredWorkColours(value)) {
+    return packRecord({ type: "work-colours", faceCount: value.faceCount, savedAt: value.savedAt }, value.colours);
+  }
+  if (isRecord(value) && typeof value.name === "string" && value.buffer instanceof ArrayBuffer) {
+    return packRecord({ type: "template", name: value.name }, new Uint8Array(value.buffer));
+  }
+  return null;
+}
+
+function deserialiseRecord(buffer: ArrayBuffer): unknown {
+  const record = unpackRecord(buffer);
+  if (!record) return null;
+  const { header, payload } = record;
+  if (header.type === "work-file") {
+    const paletteLength = Number(header.paletteLength) || 0;
+    const palette = paletteLength > 0 ? payload.slice(0, paletteLength) : undefined;
+    const body = payload.slice(paletteLength);
+    const out: StoredWorkFile = {
+      name: String(header.name),
+      kind: header.kind === "obj" || header.kind === "nomad" ? header.kind : "rodin",
+      buffer: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      palette,
+      savedAt: Number(header.savedAt) || 0,
+    };
+    return out;
+  }
+  if (header.type === "work-colours") {
+    const out: StoredWorkColours = { faceCount: Number(header.faceCount) || 0, colours: payload, savedAt: Number(header.savedAt) || 0 };
+    return out;
+  }
+  if (header.type === "template") {
+    return { name: String(header.name), buffer: payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) };
+  }
+  return null;
+}
+
+/** Reads a record: the local server's file when available (migrating a browser copy to it once), else IndexedDB. */
+export async function dataGet<T>(key: string): Promise<T | null> {
+  if (await localServerAvailable()) {
+    try {
+      const res = await fetch(dataUrl(key), { cache: "no-store" });
+      const missing = res.status === 204 || res.status === 404;
+      if (res.ok && !missing) return deserialiseRecord(await res.arrayBuffer()) as T | null;
+      if (missing) {
+        // Nothing in the folder yet: carry over what an earlier version kept in the browser.
+        const legacy = await idbGet<T>(key);
+        if (legacy !== null) {
+          await dataSet(key, legacy);
+          return legacy;
+        }
+        return null;
+      }
+    } catch {
+      // fall through to the browser store
+    }
+  }
+  return idbGet<T>(key);
+}
+
+export async function dataSet(key: string, value: unknown): Promise<boolean> {
+  if (await localServerAvailable()) {
+    const bytes = serialiseRecord(value);
+    if (bytes) {
+      try {
+        const res = await fetch(dataUrl(key), { method: "PUT", body: bytes.buffer as ArrayBuffer, headers: { "Content-Type": "application/octet-stream" } });
+        if (res.ok) return true;
+      } catch {
+        // fall through
+      }
+    }
+  }
+  return idbSet(key, value);
+}
+
+export async function dataDelete(key: string): Promise<void> {
+  if (await localServerAvailable()) {
+    try {
+      await fetch(dataUrl(key), { method: "DELETE" });
+    } catch {
+      // ignore
+    }
+  }
+  await idbDelete(key);
+}
+
+export async function clearStoredWorkEverywhere(): Promise<void> {
+  await Promise.all([dataDelete(WORK_FILE_KEY), dataDelete(WORK_COLOURS_KEY)]);
+}
+
+/** Settings kept as JSON in the local server's folder (null when the server is not running or has none). */
+export async function loadServerSettings(): Promise<PipelineSettings | null> {
+  if (!(await localServerAvailable())) return null;
+  try {
+    const res = await fetch(dataUrl("settings"), { cache: "no-store" });
+    if (!res.ok || res.status === 204) return null;
+    return mergeSettings(JSON.parse(await res.text()));
+  } catch {
+    return null;
+  }
+}
+
+export async function storeServerSettings(settings: PipelineSettings): Promise<boolean> {
+  if (!(await localServerAvailable())) return false;
+  try {
+    const res = await fetch(dataUrl("settings"), { method: "PUT", body: settingsToJson(settings), headers: { "Content-Type": "application/json" } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

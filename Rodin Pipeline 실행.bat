@@ -23,9 +23,19 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+netstat -ano | findstr /R /C:":5173 .*LISTENING" >nul 2>nul
+if not errorlevel 1 (
+  echo.
+  echo 앱이 이미 켜져 있습니다. 브라우저에서 엽니다: http://localhost:5173/
+  echo The app is already running; opening it in the browser: http://localhost:5173/
+  start http://localhost:5173/
+  timeout /t 2 >nul
+  exit /b 0
+)
 echo.
 echo 앱을 켭니다. 브라우저가 자동으로 열립니다. 이 창을 닫으면 앱이 꺼집니다.
 echo Starting the app; the browser opens automatically. Closing this window stops the app.
+echo 설정과 작업은 rodin-pipeline\user-data 폴더에 저장됩니다. / Settings and work are saved in rodin-pipeline\user-data.
 echo.
 call npm start
 pause

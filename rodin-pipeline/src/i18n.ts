@@ -342,6 +342,10 @@ const ko = {
   "view.backgroundHint": "미리보기와 색지도의 배경. 격자는 배경과 모델 색을 구분해 주고, 슬라이더로 밝기를 조절합니다.",
   "view.checker": "격자",
   "view.brightness": "배경 밝기",
+  "storage.folder": "저장: 폴더",
+  "storage.folderHint": "설정과 작업이 rodin-pipeline/user-data 폴더에 파일로 저장됩니다. 브라우저나 포트가 바뀌어도 유지됩니다.",
+  "storage.browser": "저장: 브라우저",
+  "storage.browserHint": "이 주소의 브라우저 저장소에만 저장됩니다. 실행 파일로 켜면 폴더에 저장됩니다.",
   "help.export": "내보내기\n- PrusaSlicer 2.9.6 이상용 3MF. 칠하기 정보와 가상 익스트루더 정의(JSON)가 들어갑니다\n- 좌표/배율/목표 높이: Rodin 좌표를 그대로 두거나 mm로 맞춥니다. '베드에 놓기'와 '중앙 정렬'로 배치\n- 베드 크기는 템플릿에서 가져오거나 직접 입력\n- 템플릿 프린터 설정 포함: 기본 꺼짐. 켜면 템플릿의 Slic3r_PE.config를 그대로 넣습니다\n- 검증 목록이 모두 통과해야 파일이 만들어집니다\n- 노마드 왕복: 색 편집용 OBJ를 내보내고, Nomad Sculpt에서 칠한 OBJ를 다시 읽어 팔레트 색에 맞춥니다",
 };
 
@@ -678,6 +682,10 @@ const en: Record<Key, string> = {
   "view.backgroundHint": "Background of the preview and the colour map. The checkerboard separates background from model colours; the slider sets its brightness.",
   "view.checker": "Checker",
   "view.brightness": "Background brightness",
+  "storage.folder": "storage: folder",
+  "storage.folderHint": "Settings and work are saved as files in rodin-pipeline/user-data, independent of browser and port.",
+  "storage.browser": "storage: browser",
+  "storage.browserHint": "Saved only in this address's browser storage. Run through the launcher to save into the folder.",
   "help.export": "Export\n- A 3MF for PrusaSlicer 2.9.6 or newer with the painting data and the virtual extruder definitions (JSON)\n- Coordinates / scale / target height: keep Rodin coordinates or fit to mm. 'Put on bed' and 'Centre on bed' place the model\n- Bed size comes from the template or is typed in\n- Include template printer config: off by default. On, the template's Slic3r_PE.config is copied in\n- The file is only written when every check in the list passes\n- Nomad round trip: export an OBJ for colour editing and re-import the OBJ painted in Nomad Sculpt, snapped to the palette colours",
 };
 

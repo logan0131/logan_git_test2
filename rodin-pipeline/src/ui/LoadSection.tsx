@@ -263,9 +263,12 @@ export function LoadSection({
                   {templateInfo.physicalColours.length > 0 ? (
                     <span className="swatch-row" style={{ display: "inline-flex" }}>
                       {templateInfo.physicalColours.map((rgb, i) => (
-                        <Swatch key={`${rgbToHex(rgb)}-${i}`} rgb={rgb} size={14} title={`E${i + 1} ${rgbToHex(rgb)}`} />
+                        <Swatch key={`${rgbToHex(rgb)}-${i}`} rgb={rgb} size={14} title={`E${i + 1} ${templateInfo.physicalNames[i] ?? ""} ${rgbToHex(rgb)}`.replace(/\s+/g, " ")} />
                       ))}
-                      <span className="muted">{t("load.templateColours", { n: templateInfo.physicalColours.length })}</span>
+                      <span className="muted">
+                        {t("load.templateColours", { n: templateInfo.physicalColours.length })}
+                        {templateInfo.physicalNames.length > 0 ? ` · ${templateInfo.physicalNames.slice(0, templateInfo.physicalColours.length).join(", ")}` : ""}
+                      </span>
                     </span>
                   ) : (
                     t("load.templateNoColours")

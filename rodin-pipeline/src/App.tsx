@@ -85,7 +85,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.8";
+const APP_VERSION = "0.4.9";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -740,17 +740,35 @@ export default function App() {
     if (template) void dataSet("template", { name: template.info.fileName, buffer: template.buffer });
   }, [settings.rememberTemplate, template]);
 
-  /** Copy the template's filament colours (E1..En) into the app's slots so both sides agree. */
-  function adoptTemplateColours(): void {
-    const colours = template?.info.physicalColours ?? [];
-    if (colours.length === 0) return;
+  /**
+   * Copy the template's extruder filaments (colour, preset name, type) into the slots E1..En and
+   * add them to the filament list. Returns how many slots were set.
+   */
+  function applyTemplateFilaments(info: Template3mfInfo): number {
+    const colours = info.physicalColours;
+    if (colours.length === 0) return 0;
+    const count = Math.max(MIN_PHYSICAL, Math.min(MAX_PHYSICAL, colours.length));
     setSettings((prev) => {
       const hex = prev.filaments.hex.slice();
-      const count = Math.max(MIN_PHYSICAL, Math.min(MAX_PHYSICAL, colours.length));
-      for (let i = 0; i < count && i < colours.length; i++) hex[i] = rgbToHex(colours[i]);
-      return { ...prev, filaments: { ...prev.filaments, count, hex }, manualPhysical: {} };
+      const names = prev.filaments.names.slice();
+      const list = prev.filamentList.slice();
+      for (let i = 0; i < count && i < colours.length; i++) {
+        hex[i] = rgbToHex(colours[i]);
+        const name = (info.physicalNames[i] ?? "").trim();
+        if (name) names[i] = name;
+        if (name && !list.some((entry) => entry.hex.toUpperCase() === hex[i] && entry.name === name)) {
+          list.push({ name, type: (info.physicalTypes[i] ?? "").trim(), hex: hex[i] });
+        }
+      }
+      return { ...prev, filaments: { ...prev.filaments, count, hex, names }, filamentList: list, manualPhysical: {} };
     });
-    setStatus(t("status.templateColoursAdopted", { n: colours.length }));
+    return Math.min(count, colours.length);
+  }
+
+  function adoptTemplateColours(): void {
+    if (!template) return;
+    const n = applyTemplateFilaments(template.info);
+    if (n > 0) setStatus(t("status.templateFilamentsApplied", { n }));
   }
 
   function clearTemplate(): void {
@@ -1055,7 +1073,12 @@ export default function App() {
       const [info, buffer] = await Promise.all([readTemplate3mf(file), file.arrayBuffer()]);
       setTemplate({ info, buffer });
       if (info.bedSize) patchSettings("export", { ...settings.export, bedX: Math.round(info.bedSize.x), bedY: Math.round(info.bedSize.y) });
-      setStatus(t("status.templateLoaded", { name: file.name, bed: info.bedSize ? t("status.templateBed", { x: info.bedSize.x, y: info.bedSize.y }) : "" }));
+      // The template's extruder filaments become the physical slots so both sides agree from the start.
+      const applied = applyTemplateFilaments(info);
+      setStatus(
+        t("status.templateLoaded", { name: file.name, bed: info.bedSize ? t("status.templateBed", { x: info.bedSize.x, y: info.bedSize.y }) : "" }) +
+          (applied > 0 ? ` · ${t("status.templateFilamentsApplied", { n: applied })}` : ""),
+      );
     } catch (err) {
       setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {

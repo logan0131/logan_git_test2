@@ -72,7 +72,7 @@ import { Swatch, pct } from "./ui/common";
 import { ColourSelect } from "./ui/ColourSelect";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.1";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";

@@ -1,3 +1,4 @@
+import { MAX_PAINTABLE_EXTRUDER_ID } from "@core/paintCodes";
 import type { Template3mfInfo } from "@core/template3mf";
 import type { ExportSettings } from "../engine/types";
 import { useT } from "../i18n";
@@ -91,8 +92,8 @@ export function ExportSection({
               })}
               {check.renumbered.length > 0 ? t("exp.renumbered", { list: check.renumbered.map((r) => `${r.from}→${r.to}`).join(", ") }) : ""}
             </div>
-            <div className={check.failures.some((f) => /at most 15/.test(f)) ? "fail" : ""}>
-              {t("exp.checkLimit", { p: check.physicalCount, v: check.virtualIds.length, t: check.physicalCount + check.virtualIds.length })}
+            <div className={check.failures.some((f) => /at most \d+/.test(f)) ? "fail" : ""}>
+              {t("exp.checkLimit", { p: check.physicalCount, v: check.virtualIds.length, t: check.physicalCount + check.virtualIds.length, max: MAX_PAINTABLE_EXTRUDER_ID })}
             </div>
             <div className={check.failures.some((f) => /JSON|defined/.test(f)) ? "fail" : ""}>{t("exp.checkStates")}</div>
             <div className={check.failures.some((f) => /outside|Unpainted/.test(f)) ? "fail" : ""}>{t("exp.checkPhysical", { p: check.physicalCount })}</div>

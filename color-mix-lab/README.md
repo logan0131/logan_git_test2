@@ -23,7 +23,7 @@ npm test               # vitest: 41 tests (paint codes, Rodin loader, merge, Nom
 
 | 작업지시서 | 구현 | UI 위치 |
 | --- | --- | --- |
-| §1 칠하기 코드 ↔ 익스트루더 번호 | `src/workflows/vertex/core/paintCodes.ts` (`encodePaintCode` / `decodePaintCode`, 최대 15색 상수) | – |
+| §1 칠하기 코드 ↔ 익스트루더 번호 | `src/workflows/vertex/core/paintCodes.ts` (`encodePaintCode` / `decodePaintCode`, 최대 255색 상수 `MAX_PAINTABLE_EXTRUDER_ID`) | – |
 | §2 기능 A: Rodin 3MF 불러오기 | `core/rodin3mf.ts` (`loadRodin3mf`) | VertexColor 2 ColorMix → **Load** 탭 → "Rodin 3D Print 3MF (Face Color)" |
 | §3 기능 B: 병합 시 재판정 + 정리 | `core/meshAdjacency.ts`, `core/mergeReprojection.ts` (`mergeWithReprojection`) | **Palette** 탭 → Edit virtual extruders → "Merge selected" + "Re-judge shade colours + clean up" 토글, "Shade re-judgement and cleanup" 패널 |
 | §4 기능 C: 노마드 왕복 | `core/nomadRoundTrip.ts` (`buildNomadObj`, `parseNomadObj`, `applyNomadObjToModel`) | **Export** 탭 → "Nomad Sculpt round trip (optional)" |
@@ -62,7 +62,7 @@ npm test               # vitest: 41 tests (paint codes, Rodin loader, merge, Nom
 
 - **D-1** 실제 사용된 VE만 남기고 `(실물 수 + 1)`부터 연속 번호로 다시 매깁니다. `3D/3dmodel.model`의 모든 `slic3rpe:mmu_segmentation`과 `Prusa_Slicer_full_spectrum.json`의 `virtual_extruders[].id`에 같은 재매핑을 적용하며, 상태 표시줄에 `VE9→VE8` 같은 재번호 내역을 보여줍니다.
 - **D-2** `Metadata/Slic3r_PE.config`를 기본으로 넣지 않습니다(생성형 최소 설정도 폐기). 3MF 템플릿을 불러온 경우에만 "Include printer config from template" 체크로 옵트인할 수 있습니다. `Slic3r_PE_model.config`, `Prusa_Slicer_full_spectrum.json`, `Prusa_Slicer_wipe_tower_information.xml`, `thumbnail.png`는 유지됩니다.
-- **D-3** 내보내기 전 검증(하나라도 실패하면 파일을 만들지 않고 에러): 칠하기 상태 집합 == JSON VE id 집합, VE id 연속, 실물 + 가상 ≤ 15, 실물 번호 1..n_physical, 미칠 삼각형 없음.
+- **D-3** 내보내기 전 검증(하나라도 실패하면 파일을 만들지 않고 에러): 칠하기 상태 집합 == JSON VE id 집합, VE id 연속, 실물 + 가상 ≤ 255, 실물 번호 1..n_physical, 미칠 삼각형 없음.
 - **D-4** 썸네일은 병합/정리 후의 **유효 색**(가상 혼합 미리보기 색 또는 실물 필라멘트 색)으로 다시 렌더합니다.
 
 ### §6 팔레트 기본값
@@ -79,7 +79,7 @@ npm test               # vitest: 41 tests (paint codes, Rodin loader, merge, Nom
 ## 참고 사항
 
 - 프로젝트 저장(JSON)에는 OBJ만 내장됩니다. Rodin 3MF는 외부 파일로 두고 "Reload data"로 다시 읽습니다.
-- 15색 제한은 `MAX_PAINTABLE_EXTRUDER_ID`(paintCodes.ts) 한 곳에서 바꿉니다. 인코더 자체는 16(`DC`)과 확장형(`xxEC`)도 만들 수 있지만 작업지시서 기준으로 15에서 막습니다.
+- 색 수 제한은 `MAX_PAINTABLE_EXTRUDER_ID`(paintCodes.ts) 한 곳에서 바꿉니다. 작업지시서의 15는 PrusaSlicer 2.9.5 이하의 6비트 칠하기 상태 기준이었고, ColorMix가 들어간 2.9.6부터는 상태가 256개(`TRIANGLE_STATE_TYPE_COUNT = 256`, 17번 이상은 14비트 `xxEC` 코드 + `slic3rpe:MmPaintingVersion` 2)라서 실물 + 가상 255까지 받습니다. 지금은 255에서 막습니다.
 - Texture Baking 경로의 원본 텍스처 기반 피부 마스크 보완(§3 보완책 1)은 넣지 않았습니다. 필요하면 `mergeWithReprojection`의 `faceLabels`를 채우기 전에 마스크로 그룹을 고정하면 됩니다.
 
 ---

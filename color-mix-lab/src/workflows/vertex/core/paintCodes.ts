@@ -10,18 +10,27 @@
  *   extruder 3+ -> hex(extruder - 3) + "C"      ("0C" = 3 … "CC" = 15, "DC" = 16)
  *   extruder 17+ -> two hex digits (extruder - 17) + "EC"   (extended form)
  *
- * PrusaSlicer Full Spectrum virtual extruders share the same numbering space
- * with the physical extruders, so the total number of physical + virtual
- * extruders is limited by this encoding.  The work order for the Rodin
- * pipeline fixes that limit at 15 (see MAX_PAINTABLE_EXTRUDER_ID).
+ * PrusaSlicer Full Spectrum (ColorMix) virtual extruders share the same
+ * numbering space with the physical extruders, so the total number of
+ * physical + virtual extruders is limited by this encoding:
+ *
+ *   PrusaSlicer <= 2.9.5: TriangleSelector states are 6-bit, max extruder 15
+ *                         (the original work order's "15 colours" limit).
+ *   PrusaSlicer >= 2.9.6: TRIANGLE_STATE_TYPE_COUNT = 256; states 17..255 use
+ *                         the 14-bit "vvEC" form and the file must carry
+ *                         <metadata name="slic3rpe:MmPaintingVersion">2</metadata>
+ *                         (which the exporter always writes).
+ *
+ * ColorMix itself only exists from 2.9.6 on, so the export accepts up to 255.
  */
 
-/** Highest physical + virtual extruder id the export accepts. */
-export const MAX_PAINTABLE_EXTRUDER_ID = 15;
+/** Highest physical + virtual extruder id the export accepts (PrusaSlicer 2.9.6+ paint state limit). */
+export const MAX_PAINTABLE_EXTRUDER_ID = 255;
 
 export function encodePaintCode(extruderId: number): string {
   const id = Math.round(extruderId);
   if (!Number.isFinite(id) || id < 1) throw new Error("Extruder ID is too small.");
+  if (id > MAX_PAINTABLE_EXTRUDER_ID) throw new Error(`Extruder ID ${id} exceeds the PrusaSlicer paint state limit (${MAX_PAINTABLE_EXTRUDER_ID}).`);
   if (id === 1) return "4";
   if (id === 2) return "8";
   const state = id - 3;

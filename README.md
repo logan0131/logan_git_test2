@@ -48,6 +48,12 @@ npx vite preview -w rodin-pipeline   # 빌드 결과 미리보기 / serve the bu
 
 The app autosaves the loaded model file and the current face colours (merges, patch recolours) in the browser's IndexedDB and restores them on the next start; the status bar shows "autosaved HH:MM" once stored. After a restore, **Undo** returns to the original colours; **Start over** in the Load section clears the model and the saved work (filament and merge settings stay). The PrusaSlicer template 3MF is remembered the same way, and the "PrusaSlicer template: name · bed" line in the Load section shows which one is attached. Storage is per browser and per address (port).
 
+### 색 수 한계 / Colour limit
+
+내보내기는 실물 + 가상 익스트루더 합계 **255**까지 받습니다. 작업지시서의 15는 PrusaSlicer 2.9.5 이하의 6비트 칠하기 상태(최대 15) 기준이었고, ColorMix가 들어간 PrusaSlicer 2.9.6부터는 삼각형 상태가 256개(17번 이상은 14비트 코드, `slic3rpe:MmPaintingVersion` 2)라서 XL 5T 기준 실물 5 + 가상 250까지 가능합니다. 가상 색이 많을수록 슬라이싱과 출력 시간이 늘어나니 필요한 만큼만 쓰세요. 16색 이하 파일은 2.9.6 이전 버전도 읽지만, 이 앱의 파일은 항상 2.9.6 이상용입니다.
+
+The export accepts up to **255** physical + virtual extruders. The work order's 15 came from the 6-bit paint state of PrusaSlicer 2.9.5 and older; PrusaSlicer 2.9.6 (the ColorMix release) has 256 triangle states (ids 17+ use a 14-bit code and `slic3rpe:MmPaintingVersion` 2), so an XL 5T can carry 5 physical + 250 virtual colours in one file. More virtual colours mean longer slicing and printing. Files from this app always target PrusaSlicer 2.9.6 or newer.
+
 ### 설치 없이 쓰기 (GitHub Pages) / Hosted version
 
 `.github/workflows/deploy-pipeline-pages.yml`이 `master`에 푸시될 때마다 `rodin-pipeline`을 빌드해 GitHub Pages에 올립니다.

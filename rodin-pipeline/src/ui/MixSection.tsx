@@ -1,3 +1,4 @@
+import { MAX_PAINTABLE_EXTRUDER_ID } from "@core/paintCodes";
 import type { PaletteEntry, PhysicalSlot, RGB } from "@core/types";
 import { rgbToHex } from "@core/colour";
 import type { VirtualBlendEntry, VirtualExtruderPlan } from "@core/virtualExtruders";
@@ -59,7 +60,7 @@ export function MixSection({
   const physicalOnlyMode = settings.assignmentMode === "physical-only";
 
   return (
-    <Section step={4} title={t("mix.title")} badge={plan ? `${t("mix.badge", { p: slots.length, v: virtualCount, t: total })}${total > 15 ? " ⚠" : ""}` : t("load.noModel")}>
+    <Section step={4} title={t("mix.title")} badge={plan ? `${t("mix.badge", { p: slots.length, v: virtualCount, t: total })}${total > MAX_PAINTABLE_EXTRUDER_ID ? " ⚠" : ""}` : t("load.noModel")}>
       <Row label={t("mix.assignmentMode")}>
         <select value={settings.assignmentMode} onChange={(e) => set({ assignmentMode: e.target.value as MixSettings["assignmentMode"] })}>
           <option value="physical-and-virtual">{t("mix.physicalAndVirtual")}</option>
@@ -131,7 +132,7 @@ export function MixSection({
               n: plan.mappingDiagnostics.poorMatchCount,
               m: plan.mappingDiagnostics.targetPaletteCount,
             })}
-            {total > 15 && <span className="danger">{t("mix.overLimit", { t: total })}</span>}
+            {total > MAX_PAINTABLE_EXTRUDER_ID && <span className="danger">{t("mix.overLimit", { t: total, max: MAX_PAINTABLE_EXTRUDER_ID })}</span>}
           </div>
           <div className="table-wrap">
             <table className="grid">

@@ -14,7 +14,7 @@ describe("paint codes", () => {
   });
 
   it("round-trips every id the encoder can produce", () => {
-    for (let id = 1; id <= 60; id++) expect(decodePaintCode(encodePaintCode(id))).toBe(id);
+    for (let id = 1; id <= MAX_PAINTABLE_EXTRUDER_ID; id++) expect(decodePaintCode(encodePaintCode(id))).toBe(id);
   });
 
   it("decodes the unpainted state and rejects garbage", () => {
@@ -25,8 +25,11 @@ describe("paint codes", () => {
     expect(() => encodePaintCode(0)).toThrow();
   });
 
-  it("documents the 15 colour limit of the work order", () => {
-    expect(MAX_PAINTABLE_EXTRUDER_ID).toBe(15);
-    expect(encodePaintCode(MAX_PAINTABLE_EXTRUDER_ID)).toBe("CC");
+  it("matches the PrusaSlicer 2.9.6 paint state limit (256 states, ids 1..255)", () => {
+    expect(MAX_PAINTABLE_EXTRUDER_ID).toBe(255);
+    expect(encodePaintCode(16)).toBe("DC");
+    expect(encodePaintCode(MAX_PAINTABLE_EXTRUDER_ID)).toBe("EEEC");
+    expect(decodePaintCode("EEEC")).toBe(255);
+    expect(() => encodePaintCode(MAX_PAINTABLE_EXTRUDER_ID + 1)).toThrow(/limit/);
   });
 });

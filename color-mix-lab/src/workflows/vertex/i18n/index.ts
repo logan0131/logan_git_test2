@@ -784,7 +784,7 @@ const en: Dict = {
   exportRenumbered: "renumbered",
   exportValidationTitle: "Export checks",
   exportValidationText:
-    "Before writing, the export verifies: painted states == JSON virtual extruder ids, ids contiguous from (physical + 1), physical + virtual ≤ 15, physical ids within 1..n. The thumbnail is rendered from the merged result.",
+    "Before writing, the export verifies: painted states == JSON virtual extruder ids, ids contiguous from (physical + 1), physical + virtual ≤ 255, physical ids within 1..n. The thumbnail is rendered from the merged result.",
 
   // --- Section 6 (palette defaults) ---
   physicalDirectSuggestionTitle: "Recommended direct physical assignments",

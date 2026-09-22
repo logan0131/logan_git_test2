@@ -72,8 +72,8 @@ function planWithGaps(): { plan: VirtualExtruderPlan; palette: PaletteEntry[] } 
   return { plan, palette };
 }
 
-function modelForPalette(palette: PaletteEntry[]): MeshModel {
-  const grid = gridMesh(7, 2);
+function modelForPalette(palette: PaletteEntry[], cols = 7, rows = 2): MeshModel {
+  const grid = gridMesh(cols, rows);
   const triangleColors: RGB[] = grid.triangles.map((_t, i) => palette[i % palette.length].rgb);
   return {
     name: "typhoeus.obj",
@@ -213,7 +213,7 @@ describe("D-3 validation", () => {
     ).toEqual([]);
   });
 
-  it("reports gaps, missing JSON entries, unused virtuals, unpainted faces and the 15 limit", () => {
+  it("reports gaps, missing JSON entries, unused virtuals, unpainted faces and the 255 limit", () => {
     const failures = validateExportAssignments({
       physicalExtruderCount: 5,
       virtuals: [{ id: 6 }, { id: 8 }],
@@ -224,31 +224,62 @@ describe("D-3 validation", () => {
     expect(failures.join("\n")).toMatch(/Virtual extruders 8 are defined/);
     expect(failures.join("\n")).toMatch(/Unpainted triangles/);
 
+    const justEnough = validateExportAssignments({
+      physicalExtruderCount: 5,
+      virtuals: Array.from({ length: 250 }, (_v, i) => ({ id: 6 + i })),
+      usedPaintStates: Array.from({ length: 250 }, (_v, i) => 6 + i),
+    });
+    expect(justEnough).toEqual([]);
     const tooMany = validateExportAssignments({
       physicalExtruderCount: 5,
-      virtuals: Array.from({ length: 11 }, (_v, i) => ({ id: 6 + i })),
-      usedPaintStates: Array.from({ length: 11 }, (_v, i) => 6 + i),
+      virtuals: Array.from({ length: 251 }, (_v, i) => ({ id: 6 + i })),
+      usedPaintStates: Array.from({ length: 251 }, (_v, i) => 6 + i),
     });
-    expect(tooMany.join("\n")).toMatch(/at most 15/);
+    expect(tooMany.join("\n")).toMatch(/at most 255/);
   });
 
-  it("refuses to export more than 15 physical + virtual extruders", async () => {
+  it("refuses to export more than 255 physical + virtual extruders", async () => {
     const { palette } = planWithGaps();
-    const extraPalette: PaletteEntry[] = Array.from({ length: 11 }, (_v, i) => ({
+    const extraPalette: PaletteEntry[] = Array.from({ length: 251 }, (_v, i) => ({
       index: i + 1,
-      rgb: [i * 20, 100, 200 - i * 10] as RGB,
+      rgb: [i % 256, (i * 7) % 256, (i * 13) % 256] as RGB,
       count: 5,
     }));
     const plan: VirtualExtruderPlan = {
       virtualBlends: extraPalette.map((entry, i) => blend(6 + i, entry.rgb, [entry.index])),
       physicalOnly: [],
-      mappingDiagnostics: { targetPaletteCount: 11, averageError: 0, worstError: 0, poorMatchCount: 0, poorMatchThreshold: 8, collapsedTargetColours: 0 },
+      mappingDiagnostics: { targetPaletteCount: 251, averageError: 0, worstError: 0, poorMatchCount: 0, poorMatchThreshold: 8, collapsedTargetColours: 0 },
       paletteToAssignment: new Map(),
     };
-    const model = modelForPalette(extraPalette);
+    const model = modelForPalette(extraPalette, 126, 2);
     await expect(
       buildPrusa3mfBlob(exportOptions({ virtualPlan: plan, palette: extraPalette, model, adjustedColors: model.triangleColors })),
-    ).rejects.toThrow(/at most 15/);
+    ).rejects.toThrow(/at most 255|limit \(255\)/);
+    expect(palette.length).toBe(7);
+  });
+
+  it("exports ids above 16 with the 14-bit paint codes and painting version 2", async () => {
+    const { palette } = planWithGaps();
+    const bigPalette: PaletteEntry[] = Array.from({ length: 20 }, (_v, i) => ({
+      index: i + 1,
+      rgb: [i * 12, 90, 220 - i * 9] as RGB,
+      count: 5,
+    }));
+    const plan: VirtualExtruderPlan = {
+      virtualBlends: bigPalette.map((entry, i) => blend(6 + i, entry.rgb, [entry.index])),
+      physicalOnly: [],
+      mappingDiagnostics: { targetPaletteCount: 20, averageError: 0, worstError: 0, poorMatchCount: 0, poorMatchThreshold: 8, collapsedTargetColours: 0 },
+      paletteToAssignment: new Map(),
+    };
+    const model = modelForPalette(bigPalette);
+    const result = await buildPrusa3mfBlob(exportOptions({ virtualPlan: plan, palette: bigPalette, model, adjustedColors: model.triangleColors }));
+    expect(result.summary.virtualIds).toEqual(Array.from({ length: 20 }, (_v, i) => 6 + i));
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    const xml = await zip.file("3D/3dmodel.model")!.async("text");
+    expect(xml).toContain('<metadata name="slic3rpe:MmPaintingVersion">2</metadata>');
+    expect(xml).toContain('slic3rpe:mmu_segmentation="DC"'); // id 16
+    expect(xml).toContain('slic3rpe:mmu_segmentation="00EC"'); // id 17
+    expect(xml).toContain('slic3rpe:mmu_segmentation="08EC"'); // id 25
     expect(palette.length).toBe(7);
   });
 

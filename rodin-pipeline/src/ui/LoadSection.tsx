@@ -186,7 +186,7 @@ export function LoadSection({
               value={paletteSettings.maxColours}
               onChange={(e) => onPaletteSettingsChange({ ...paletteSettings, maxColours: Number(e.target.value) })}
             >
-              {Array.from({ length: 15 }, (_v, i) => i + 2).map((n) => (
+              {Array.from({ length: 63 }, (_v, i) => i + 2).map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>

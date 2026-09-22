@@ -137,7 +137,10 @@ table.grid tr.row-selected.hover-row td { background: rgba(255, 216, 79, 0.2); }
 
 /* filament list */
 .filament-list textarea { width: 100%; min-height: 70px; font-family: monospace; font-size: 0.8rem; background: #0f141a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
-.filament-grid { grid-template-columns: 34px 40px 1fr 96px 110px; }
+.filament-grid { grid-template-columns: 34px 40px 1fr 96px 120px 46px; }
+.slot-order { display: inline-flex; flex-direction: column; gap: 1px; }
+.slot-order button { font-size: 0.6rem; line-height: 1; padding: 1px 6px; }
+.filament-list-table td select { max-width: 90px; }
 
 /* pick panel over the viewer */
 .pick-panel { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); background: rgba(255, 138, 61, 0.10); font-size: 0.86rem; }

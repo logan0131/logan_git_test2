@@ -252,6 +252,15 @@ const ko = {
   "legend.selected": "선택한 색",
   "legend.picked": "선택한 묶음",
   "layout.splitter": "드래그: 패널 너비 조절 · 더블클릭: 기본 너비",
+  "fil.listSlot": "슬롯",
+  "fil.listName": "이름",
+  "fil.listType": "종류",
+  "fil.listRemove": "목록에서 제거",
+  "fil.moveUp": "위 슬롯과 바꾸기",
+  "fil.moveDown": "아래 슬롯과 바꾸기",
+  "fil.unassigned": "–",
+  "fil.listFormatHint": "줄 앞에 E1: 을 붙이면 그 슬롯에 바로 들어갑니다. 예: E1: Prusament PLA Jet Black; PLA; #24292A",
+  "fil.listAssignHint": "목록의 슬롯 칸에서 E1~E{n}을 고르면 그 슬롯의 색과 이름이 바뀝니다. 슬롯 옆 ▲▼로 순서를 바꿉니다.",
 };
 
 export type Key = keyof typeof ko;
@@ -497,6 +506,15 @@ const en: Record<Key, string> = {
   "legend.selected": "selected colours",
   "legend.picked": "selected patch",
   "layout.splitter": "Drag to resize the panel · double-click to reset",
+  "fil.listSlot": "Slot",
+  "fil.listName": "Name",
+  "fil.listType": "Type",
+  "fil.listRemove": "Remove from list",
+  "fil.moveUp": "Swap with the slot above",
+  "fil.moveDown": "Swap with the slot below",
+  "fil.unassigned": "–",
+  "fil.listFormatHint": "Prefix a line with E1: to put it straight into that slot, e.g. E1: Prusament PLA Jet Black; PLA; #24292A",
+  "fil.listAssignHint": "Pick E1–E{n} in the Slot column to put a list entry into that slot; ▲▼ next to a slot swaps its order.",
 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { ko, en };

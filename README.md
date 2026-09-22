@@ -37,7 +37,7 @@ npm run dev:pipeline                 # 그다음 브라우저에서 / then open 
 
 ```bash
 npm run dev:cml       # 원본 Color Mix Lab UI (엔진 확인용) → http://localhost:5173/color-mix-lab/
-npm test              # 엔진 단위 테스트 / engine unit tests (vitest, 41)
+npm test              # 엔진 단위 테스트 / engine unit tests (vitest, 44)
 npm run build         # 두 앱 빌드 / build both apps (rodin-pipeline/dist, color-mix-lab/dist)
 npx vite preview -w rodin-pipeline   # 빌드 결과 미리보기 / serve the built app
 ```
@@ -69,6 +69,11 @@ The export accepts up to **255** physical + virtual extruders. The work order's 
 `.github/workflows/deploy-pipeline-pages.yml`이 `master`에 푸시될 때마다 `rodin-pipeline`을 빌드해 GitHub Pages에 올립니다.
 저장소 **Settings → Pages → Source: GitHub Actions**로 한 번 켜 두면 `https://logan0131.github.io/logan_git_test2/`에서 바로 열립니다.
 *The workflow builds and publishes `rodin-pipeline` on every push to `master`. Enable it once under Settings → Pages → Source: GitHub Actions and the app is served at `https://logan0131.github.io/logan_git_test2/`.*
+
+## 문제 해결 / Troubleshooting
+
+헤맸던 문제와 원인, 내보내기 전 체크리스트: [rodin-pipeline/docs/retrospective.md](rodin-pipeline/docs/retrospective.md)
+*What went wrong during development, why, and the pre-export checklist (Korean).*
 
 ## 작업지시서 / work order
 

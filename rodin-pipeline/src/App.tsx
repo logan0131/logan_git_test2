@@ -78,7 +78,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.1";
+const APP_VERSION = "0.4.2";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -152,6 +152,9 @@ export default function App() {
   const [brushMode, setBrushMode] = useState(false);
   const [brushRadius, setBrushRadius] = useState(1);
   const [brushMaskOnly, setBrushMaskOnly] = useState(true);
+  const [eyedropper, setEyedropper] = useState(false);
+  const eyedropperRef = useRef(false);
+  eyedropperRef.current = eyedropper;
   const [coloursVersion, setColoursVersion] = useState(0);
   const strokeRef = useRef<{ working: RGB[]; mask: Uint8Array | null; count: number; rgb: RGB; hex: string } | null>(null);
   const viewerRef0 = useRef<MeshViewerHandle>(null);
@@ -534,8 +537,30 @@ export default function App() {
     return { n: patches.length, faces: faces.toLocaleString(), pct: pct(fraction) };
   }
 
+  /** Eyedropper: the face's palette colour becomes the brush / "change to" colour. */
+  function sampleFace(faceIndex: number | null): void {
+    const current = modelRef.current;
+    setEyedropper(false);
+    if (!current || faceIndex === null || faceIndex < 0 || faceIndex >= labels.length) {
+      setStatus(t("status.pickNothing"));
+      return;
+    }
+    const position = labels[faceIndex];
+    const hex = hexByPosition[position] ?? rgbToHex(current.triangleColors[faceIndex]);
+    if (hexByPosition.includes(hex)) setPickTarget(hex);
+    else {
+      setPickTarget("__new__");
+      setPickCustom(hex);
+    }
+    setStatus(t("status.eyedropper", { index: palette[position]?.index ?? 0, hex }));
+  }
+
   async function handlePick(faceIndex: number | null, info: PickInfo = { double: false, toggle: false }): Promise<void> {
     if (!model) return;
+    if (info.alt || eyedropperRef.current) {
+      sampleFace(faceIndex);
+      return;
+    }
     if (faceIndex === null || faceIndex < 0 || faceIndex >= labels.length) {
       if (pickedRef.current.length > 0 || shownHexRef.current) clearPick();
       else setStatus(t("status.pickNothing"));
@@ -1408,6 +1433,7 @@ export default function App() {
     overlays,
     flat,
     brush: brushMode,
+    eyedropper,
     emptyLabel: t("view.empty"),
     onPick: (face: number | null, info: PickInfo) => void handlePick(face, info),
     onBrushHover: brushHover3D,
@@ -1636,9 +1662,17 @@ export default function App() {
                 ]}
               />
               {(pickTarget === "__new__" || !pickTarget) && <ColourPicker value={pickCustom} onChange={(hex) => setPickCustom(hex.toUpperCase())} />}
-              <span className="cell-colour">
-                <Swatch hex={brushHex} size={14} /> <code>{brushHex}</code>
-              </span>
+              <button
+                type="button"
+                className={`btn small eyedropper-toggle${eyedropper ? " active" : ""}`}
+                title={t("brush.eyedropperHint")}
+                onClick={() => {
+                  setEyedropper((v) => !v);
+                  if (!eyedropper) setStatus(t("status.eyedropperOn"));
+                }}
+              >
+                {t("brush.eyedropper")}
+              </button>
               <span>{t("brush.size")}</span>
               <NumberField value={brushRadius} min={0.01} max={1000} step={Math.max(0.01, Number((brushRadius / 5).toPrecision(1)))} onChange={(v) => setBrushRadius(Math.max(0.01, v))} />
               <label className="inline" style={{ gap: 6 }}>
@@ -1682,6 +1716,19 @@ export default function App() {
                     ]}
                   />
                   {pickTarget === "__new__" && <ColourPicker value={pickCustom} onChange={(hex) => setPickCustom(hex.toUpperCase())} />}
+                  {!brushMode && (
+                    <button
+                      type="button"
+                      className={`btn small eyedropper-toggle${eyedropper ? " active" : ""}`}
+                      title={t("brush.eyedropperHint")}
+                      onClick={() => {
+                        setEyedropper((v) => !v);
+                        if (!eyedropper) setStatus(t("status.eyedropperOn"));
+                      }}
+                    >
+                      {t("brush.eyedropper")}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn primary small"
@@ -1717,6 +1764,7 @@ export default function App() {
                 coloursVersion={coloursVersion}
                 masks={atlasMasks}
                 brush={{ active: brushMode, radiusPx: atlas ? brushRadius * atlas.scale : 4, hex: brushHex }}
+                eyedropper={eyedropper}
                 onPick={(face, info) => void handlePick(face, info)}
                 onHover={mapHover}
                 onBrushStart={() => void beginStroke()}

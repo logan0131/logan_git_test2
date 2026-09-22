@@ -12,6 +12,8 @@ export interface PickInfo {
   toggle: boolean;
   /** Which view the click came from (the other view re-centres on the patch). */
   source?: "3d" | "map";
+  /** Alt held or eyedropper mode: sample the colour under the cursor instead of picking. */
+  alt?: boolean;
 }
 
 export interface HighlightOverlay {
@@ -64,6 +66,8 @@ export interface MeshViewerProps {
   flat?: boolean;
   /** Brush mode: left-drag paints (rotate with the right button, zoom with the wheel). */
   brush?: boolean;
+  /** Next click samples a colour instead of picking/painting. */
+  eyedropper?: boolean;
   onBrushHover?: (hit: ViewerHit | null) => void;
   onBrushStart?: (hit: ViewerHit | null) => void;
   onBrushDrag?: (hit: ViewerHit | null) => void;
@@ -270,7 +274,7 @@ function makeCursorLine(): THREE.LineLoop {
 }
 
 export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function MeshViewer(
-  { positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className, flat = false, brush = false, onBrushHover, onBrushStart, onBrushDrag, onBrushEnd },
+  { positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className, flat = false, brush = false, eyedropper = false, onBrushHover, onBrushStart, onBrushDrag, onBrushEnd },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -281,6 +285,8 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
   flatRef.current = flat;
   const brushRef = useRef(brush);
   brushRef.current = brush;
+  const eyedropperRef = useRef(eyedropper);
+  eyedropperRef.current = eyedropper;
 
   useImperativeHandle(
     ref,
@@ -418,7 +424,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
       else callbacksRef.current.onBrushHover?.(hit);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (brushRef.current && event.button === 0) {
+      if (brushRef.current && event.button === 0 && !event.altKey && !eyedropperRef.current) {
         brushDown = true;
         renderer.domElement.setPointerCapture(event.pointerId);
         callbacksRef.current.onBrushStart?.(gpuPick(state, event.clientX, event.clientY));
@@ -450,7 +456,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
       const now = performance.now();
       const double = face !== null && lastClick !== null && lastClick.face === face && now - lastClick.time < 400;
       lastClick = double ? null : { face, time: now };
-      handler(face, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey, source: "3d" });
+      handler(face, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey, alt: event.altKey || eyedropperRef.current, source: "3d" });
     };
     const onPointerLeave = () => {
       pendingMove = null;
@@ -502,12 +508,12 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
     state.controls.mouseButtons = brush
       ? { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
       : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-    state.renderer.domElement.style.cursor = brush ? "crosshair" : "";
+    state.renderer.domElement.style.cursor = eyedropper ? "cell" : brush ? "crosshair" : "";
     if (!brush && state.cursorLine.visible) {
       state.cursorLine.visible = false;
       requestRender(state);
     }
-  }, [brush]);
+  }, [brush, eyedropper]);
 
   // Geometry from positions.
   useEffect(() => {

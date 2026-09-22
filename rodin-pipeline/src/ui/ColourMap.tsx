@@ -21,6 +21,8 @@ export interface ColourMapProps {
   coloursVersion: number;
   masks: AtlasMasks;
   brush: { active: boolean; radiusPx: number; hex: string };
+  /** Next click samples a colour instead of picking/painting. */
+  eyedropper?: boolean;
   onPick?: (face: number | null, info: PickInfo) => void;
   onHover?: (face: number | null) => void;
   onBrushStart?: () => void;
@@ -39,7 +41,7 @@ interface ViewTransform {
 }
 
 export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function ColourMap(
-  { atlas, building, colourOf, coloursVersion, masks, brush, onPick, onHover, onBrushStart, onBrushPaint, onBrushEnd, label, hint, emptyLabel, buildingLabel },
+  { atlas, building, colourOf, coloursVersion, masks, brush, eyedropper = false, onPick, onHover, onBrushStart, onBrushPaint, onBrushEnd, label, hint, emptyLabel, buildingLabel },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -55,6 +57,8 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
   callbacksRef.current = { onPick, onHover, onBrushStart, onBrushPaint, onBrushEnd, colourOf };
   const brushRef = useRef(brush);
   brushRef.current = brush;
+  const eyedropperRef = useRef(eyedropper);
+  eyedropperRef.current = eyedropper;
   const atlasRef = useRef(atlas);
   atlasRef.current = atlas;
 
@@ -145,14 +149,9 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
         const bw = Math.max(4, box[2] - box[0]);
         const bh = Math.max(4, box[3] - box[1]);
         const fit = Math.max(1e-3, (Math.min(width, height) - 12) / current.size);
-        const view = viewRef.current;
-        const shownW = bw * view.scale;
-        const shownH = bh * view.scale;
-        let scale = view.scale;
-        if (shownW > width * 0.6 || shownH > height * 0.6 || Math.max(shownW, shownH) < Math.min(width, height) * 0.06) {
-          scale = Math.min((width * 0.45) / bw, (height * 0.45) / bh);
-          scale = Math.max(fit, Math.min(scale, Math.max(fit * 12, 8)));
-        }
+        // Close-up: the patch fills about half of the view, never smaller than the fitted whole map.
+        let scale = Math.min((width * 0.55) / bw, (height * 0.55) / bh);
+        scale = Math.max(fit, Math.min(scale, 48));
         const cx = (box[0] + box[2]) / 2;
         const cy = (box[1] + box[3]) / 2;
         viewRef.current = { scale, tx: width / 2 - cx * scale, ty: height / 2 - cy * scale };
@@ -248,7 +247,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
     };
     const onPointerDown = (event: PointerEvent) => {
       canvas.setPointerCapture(event.pointerId);
-      const painting = brushRef.current.active && event.button === 0;
+      const painting = brushRef.current.active && event.button === 0 && !event.altKey && !eyedropperRef.current;
       down = { x: event.clientX, y: event.clientY, button: event.button, moved: false, painting };
       if (painting) {
         callbacksRef.current.onBrushStart?.();
@@ -293,7 +292,12 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
       const now = performance.now();
       const double = face >= 0 && lastClick !== null && lastClick.face === face && now - lastClick.time < 400;
       lastClick = double || face < 0 ? null : { face, time: now };
-      callbacksRef.current.onPick?.(face >= 0 ? face : null, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey, source: "map" });
+      callbacksRef.current.onPick?.(face >= 0 ? face : null, {
+        double,
+        toggle: event.shiftKey || event.ctrlKey || event.metaKey,
+        alt: event.altKey || eyedropperRef.current,
+        source: "map",
+      });
     };
     const onPointerLeave = () => {
       cursorRef.current = null;
@@ -334,7 +338,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
   }, [requestDraw]);
 
   return (
-    <div className={`colour-map${brush.active ? " brushing" : ""}`}>
+    <div className={`colour-map${brush.active ? " brushing" : ""}${eyedropper ? " eyedropping" : ""}`}>
       <div className="mesh-viewer-label">
         {label}
         {atlas && <span className="muted"> · {atlas.size}px · {hint}</span>}

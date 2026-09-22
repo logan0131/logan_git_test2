@@ -221,3 +221,6 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 @media (max-width: 1400px) {
   .viewers.split.with-map { grid-template-columns: 1fr 1fr; }
 }
+
+.btn.eyedropper-toggle.active { background: var(--accent); border-color: var(--accent); color: white; }
+.colour-map.eyedropping .colour-map-host canvas { cursor: cell; }

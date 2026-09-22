@@ -236,17 +236,15 @@ export function buildFaceAtlas(
   const chartY = new Float64Array(chartCount);
   const widths = new Float64Array(chartCount);
   const heights = new Float64Array(chartCount);
-  let fits = false;
-  for (let attempt = 0; attempt < 16 && !fits; attempt++) {
+  const layoutAt = (s: number): boolean => {
     for (let c = 0; c < chartCount; c++) {
-      widths[c] = Math.ceil((maxU[c] - minU[c]) * scale) + 2 * pad + 1;
-      heights[c] = Math.ceil((maxV[c] - minV[c]) * scale) + 2 * pad + 1;
+      widths[c] = Math.ceil((maxU[c] - minU[c]) * s) + 2 * pad + 1;
+      heights[c] = Math.ceil((maxV[c] - minV[c]) * s) + 2 * pad + 1;
     }
     let x = 0;
     let y = 0;
     let shelf = 0;
-    fits = true;
-    for (let b = 0; b < bandCount && fits; b++) {
+    for (let b = 0; b < bandCount; b++) {
       const band = byZ.slice(b * bandSize, (b + 1) * bandSize).sort((p, q) => heights[q] - heights[p] || widths[q] - widths[p]);
       if (band.length === 0) continue;
       // A band always starts a new shelf so the vertical order follows the model.
@@ -258,26 +256,38 @@ export function buildFaceAtlas(
       for (const c of band) {
         const w = widths[c];
         const h = heights[c];
-        if (w > size) {
-          fits = false;
-          break;
-        }
+        if (w > size) return false;
         if (x + w > size) {
           y += shelf;
           x = 0;
           shelf = 0;
         }
-        if (y + h > size) {
-          fits = false;
-          break;
-        }
+        if (y + h > size) return false;
         chartX[c] = x;
         chartY[c] = y;
         x += w;
         if (h > shelf) shelf = h;
       }
     }
+    return true;
+  };
+  let fits = false;
+  for (let attempt = 0; attempt < 20 && !fits; attempt++) {
+    fits = layoutAt(scale);
     if (!fits) scale *= 0.85;
+  }
+  if (fits) {
+    // Grow back up while it still fits so the square is actually used.
+    let good = scale;
+    let step = 1.12;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = good * step;
+      if (layoutAt(candidate)) good = candidate;
+      else step = 1 + (step - 1) / 2;
+      if (step < 1.01) break;
+    }
+    scale = good;
+    layoutAt(scale);
   }
   if (!fits) throw new Error("Colour map layout did not fit; the mesh is too fragmented for this atlas size.");
 

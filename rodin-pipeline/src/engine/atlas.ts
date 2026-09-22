@@ -21,6 +21,9 @@ export interface FaceAtlas {
   /** Atlas pixels per model unit. */
   scale: number;
   chartCount: number;
+  /** Fraction of atlas pixels covered by faces, and the layout's extent in pixels (diagnostics). */
+  filledRatio: number;
+  extent: [number, number];
   /** Scratch marks for circle queries. */
   marks: Uint8Array;
 }
@@ -352,7 +355,24 @@ export function buildFaceAtlas(
     pixelIndices[pixelOffsets[f] + fill[f]++] = i;
   }
 
-  return { size, idMap, pixelOffsets, pixelIndices, faceUv, scale, chartCount, marks: new Uint8Array(n) };
+  let extentX = 0;
+  let extentY = 0;
+  for (let c = 0; c < chartCount; c++) {
+    if (chartX[c] + widths[c] > extentX) extentX = chartX[c] + widths[c];
+    if (chartY[c] + heights[c] > extentY) extentY = chartY[c] + heights[c];
+  }
+  return {
+    size,
+    idMap,
+    pixelOffsets,
+    pixelIndices,
+    faceUv,
+    scale,
+    chartCount,
+    filledRatio: pixelOffsets[n] / (size * size),
+    extent: [extentX, extentY],
+    marks: new Uint8Array(n),
+  };
 }
 
 /** Writes face colours into an RGBA buffer (all faces, or only `faces`). Returns the dirty rectangle. */

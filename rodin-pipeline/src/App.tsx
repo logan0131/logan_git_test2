@@ -1041,7 +1041,7 @@ export default function App() {
         atlasRef.current = { triangles: model.triangles, atlas: built };
         if (!cancelled) {
           setAtlas(built);
-          setStatus(t("status.atlasBuilt", { size, charts: built.chartCount.toLocaleString() }));
+          setStatus(t("status.atlasBuilt", { size, charts: built.chartCount.toLocaleString(), fill: Math.round(built.filledRatio * 100), extent: `${Math.round(built.extent[0])}×${Math.round(built.extent[1])}` }));
         }
       } catch (err) {
         if (!cancelled) setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));

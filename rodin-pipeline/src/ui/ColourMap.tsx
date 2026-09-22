@@ -50,6 +50,8 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
   const overlayRef = useRef<{ canvas: HTMLCanvasElement; image: ImageData; any: boolean } | null>(null);
   const viewRef = useRef<ViewTransform>({ scale: 1, tx: 0, ty: 0 });
   const fittedForRef = useRef<FaceAtlas | null>(null);
+  /** True once the user zoomed, panned or focused; the map then stops auto-fitting on resize. */
+  const userAdjustedRef = useRef(false);
   const cursorRef = useRef<[number, number] | null>(null);
   const remoteCursorRef = useRef<[number, number] | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -155,6 +157,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
         const cx = (box[0] + box[2]) / 2;
         const cy = (box[1] + box[3]) / 2;
         viewRef.current = { scale, tx: width / 2 - cx * scale, ty: height / 2 - cy * scale };
+        userAdjustedRef.current = true;
         requestDraw();
       },
     }),
@@ -184,6 +187,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
     base.canvas.getContext("2d")?.putImageData(base.image, 0, 0);
     if (fittedForRef.current !== atlas) {
       fittedForRef.current = atlas;
+      userAdjustedRef.current = false;
       fitView();
     }
     requestDraw();
@@ -216,7 +220,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
       canvas.height = Math.floor(height * dpr);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-      if (first || !fittedForRef.current) {
+      if (first || !fittedForRef.current || !userAdjustedRef.current) {
         first = false;
         fitView();
       }
@@ -265,6 +269,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
           const dy = event.clientY - down.y;
           if (Math.hypot(dx, dy) > 4) down.moved = true;
           if (down.moved) {
+            userAdjustedRef.current = true;
             viewRef.current = { ...viewRef.current, tx: viewRef.current.tx + dx, ty: viewRef.current.ty + dy };
             down.x = event.clientX;
             down.y = event.clientY;
@@ -316,6 +321,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
       const minScale = Math.max(1e-3, (Math.min(rect.width, rect.height) - 12) / current.size) * 0.5;
       const scale = Math.min(64, Math.max(minScale, view.scale * factor));
       const ratio = scale / view.scale;
+      userAdjustedRef.current = true;
       viewRef.current = { scale, tx: sx - (sx - view.tx) * ratio, ty: sy - (sy - view.ty) * ratio };
       cursorRef.current = toAtlas(event);
       requestDraw();
@@ -347,7 +353,15 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
         <canvas ref={canvasRef} />
       </div>
       {!atlas && <div className="mesh-viewer-empty">{building ? buildingLabel : emptyLabel}</div>}
-      <button type="button" className="btn small colour-map-fit" onClick={fitView} title="fit">
+      <button
+        type="button"
+        className="btn small colour-map-fit"
+        onClick={() => {
+          userAdjustedRef.current = false;
+          fitView();
+        }}
+        title="fit"
+      >
         ⤢
       </button>
     </div>

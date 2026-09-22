@@ -47,6 +47,7 @@ import { MergeSection, type MergeReportData } from "./ui/MergeSection";
 import { MixSection, type PhysicalDirectSuggestion } from "./ui/MixSection";
 import { ExportSection, type ExportCheck } from "./ui/ExportSection";
 import { Swatch, pct } from "./ui/common";
+import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
 const APP_VERSION = "0.1.0";
 
@@ -59,13 +60,19 @@ function yieldToUi(ms = 30): Promise<void> {
 }
 
 export default function App() {
+  const [lang, setLangState] = useState<Lang>(() => loadStoredLang());
+  const t = useCallback((key: Key, params?: Params) => translate(lang, key, params), [lang]);
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next);
+    storeLang(next);
+  }, []);
   const [settings, setSettings] = useState<PipelineSettings>(() => loadStoredSettings());
   const [model, setModel] = useState<MeshModel | null>(null);
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
   const [history, setHistory] = useState<RGB[][]>([]);
   const [template, setTemplate] = useState<{ info: Template3mfInfo; buffer: ArrayBuffer } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [status, setStatus] = useState("준비됨. Rodin 3MF를 불러오세요.");
+  const [status, setStatus] = useState(() => translate(loadStoredLang(), "status.ready"));
   const [mergeReport, setMergeReport] = useState<MergeReportData | null>(null);
   const [nomadReport, setNomadReport] = useState<{ message: string; warnings: string[] } | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("palette");
@@ -292,7 +299,7 @@ export default function App() {
 
   async function onModelFile(file: File): Promise<void> {
     const lower = file.name.toLowerCase();
-    setBusy(lower.endsWith(".3mf") ? "Rodin 3MF 읽는 중…" : "OBJ 읽는 중…");
+    setBusy(lower.endsWith(".3mf") ? t("busy.readingRodin") : t("busy.readingObj"));
     await yieldToUi();
     try {
       if (lower.endsWith(".3mf")) {
@@ -316,31 +323,36 @@ export default function App() {
           file,
         );
         setStatus(
-          `Rodin 3MF 불러옴: ${result.stats.triangleCount.toLocaleString()}면, ${result.stats.vertexCount.toLocaleString()}정점, 팔레트 ${result.stats.paletteCount}색 중 ${result.stats.usedColourCount}색 사용`,
+          t("status.rodinLoaded", {
+            faces: result.stats.triangleCount.toLocaleString(),
+            vertices: result.stats.vertexCount.toLocaleString(),
+            palette: result.stats.paletteCount,
+            used: result.stats.usedColourCount,
+          }),
         );
       } else {
         const parsed = await parseObjFile(file, (p) => {
-          if (p.totalBytes && p.loadedBytes !== undefined) setBusy(`OBJ 읽는 중… ${Math.round((p.loadedBytes / p.totalBytes) * 100)}%`);
+          if (p.totalBytes && p.loadedBytes !== undefined) setBusy(t("busy.readingObjPct", { pct: Math.round((p.loadedBytes / p.totalBytes) * 100) }));
         });
         installModel(parsed, { kind: "obj", fileName: file.name, uniqueColours: parsed.stats.uniqueFaceColors }, file);
-        setStatus(`OBJ 불러옴: ${parsed.stats.triangleCount.toLocaleString()}면, 면 색 ${parsed.stats.uniqueFaceColors}개`);
+        setStatus(t("status.objLoaded", { faces: parsed.stats.triangleCount.toLocaleString(), colours: parsed.stats.uniqueFaceColors }));
       }
     } catch (err) {
-      setStatus(`오류: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
   }
 
   async function onTemplateFile(file: File): Promise<void> {
-    setBusy("템플릿 읽는 중…");
+    setBusy(t("busy.readingTemplate"));
     try {
       const [info, buffer] = await Promise.all([readTemplate3mf(file), file.arrayBuffer()]);
       setTemplate({ info, buffer });
       if (info.bedSize) patchSettings("export", { ...settings.export, bedX: Math.round(info.bedSize.x), bedY: Math.round(info.bedSize.y) });
-      setStatus(`템플릿 불러옴: ${file.name}${info.bedSize ? ` (베드 ${info.bedSize.x} × ${info.bedSize.y})` : ""}`);
+      setStatus(t("status.templateLoaded", { name: file.name, bed: info.bedSize ? t("status.templateBed", { x: info.bedSize.x, y: info.bedSize.y }) : "" }));
     } catch (err) {
-      setStatus(`오류: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -365,7 +377,7 @@ export default function App() {
 
   async function runMerge(): Promise<void> {
     if (!model || palette.length === 0) return;
-    setBusy("면 인접 관계 계산 중…");
+    setBusy(t("busy.adjacency"));
     await yieldToUi();
     try {
       const hexes = palette.map((entry) => rgbToHex(entry.rgb));
@@ -386,7 +398,7 @@ export default function App() {
       const labelToGroup = Int32Array.from(headOf.map((head) => groupOfHead.get(head) ?? 0));
       const groupCount = heads.length;
       if (groupCount === palette.length) {
-        setStatus("합칠 대상이 지정된 색이 없습니다.");
+        setStatus(t("status.noMergeTargets"));
         return;
       }
       const flagOf = (position: number) => settings.mergeFlags[hexes[position]];
@@ -399,7 +411,7 @@ export default function App() {
       heads.forEach((head, group) => minBlob.set(group, flagOf(head)?.minBlob ?? settings.merge.minBlobDefault));
 
       const adjacency = adjacencyFor(model);
-      setBusy("그늘 재판정 + 정리 중…");
+      setBusy(t("busy.merging"));
       await yieldToUi();
       const result = mergeWithReprojection(adjacency, {
         faceLabels: labels,
@@ -432,10 +444,16 @@ export default function App() {
       setMergeReport({ rows, stats: result.stats, coloursBefore: countUniqueColours(model.triangleColors), coloursAfter: countUniqueColours(next) });
       applyColours(model, next);
       setStatus(
-        `병합 완료: ${palette.length}색 → ${groupCount}색 (재판정 ${result.stats.ambiguousFaceCount.toLocaleString()}면, 톱니 정리 ${result.stats.smoothedFaceChanges.toLocaleString()}면, 조각 흡수 ${result.stats.absorbedIslands}개)`,
+        t("status.mergeDone", {
+          from: palette.length,
+          to: groupCount,
+          ambiguous: result.stats.ambiguousFaceCount.toLocaleString(),
+          smoothed: result.stats.smoothedFaceChanges.toLocaleString(),
+          islands: result.stats.absorbedIslands,
+        }),
       );
     } catch (err) {
-      setStatus(`오류: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -447,7 +465,7 @@ export default function App() {
     setModel({ ...model, triangleColors: last, stats: { ...model.stats, uniqueFaceColors: countUniqueColours(last) } });
     setHistory((prev) => prev.slice(0, -1));
     setMergeReport(null);
-    setStatus("마지막 병합을 되돌렸습니다.");
+    setStatus(t("status.undone"));
   }
 
   // ------------------------------------------------------------------
@@ -455,7 +473,7 @@ export default function App() {
   // ------------------------------------------------------------------
   async function export3mf(): Promise<void> {
     if (!model || !plan || palette.length === 0) return;
-    setBusy("3MF 만드는 중…");
+    setBusy(t("busy.exporting"));
     await yieldToUi();
     try {
       const e = settings.export;
@@ -485,12 +503,22 @@ export default function App() {
         effectiveRgbByPaletteIndex: effectiveByIndex,
       });
       downloadBlob(result.fileName, result.blob);
-      const renumbered = result.summary.renumberedVirtuals.length > 0 ? `, 재번호 ${result.summary.renumberedVirtuals.map((r) => `VE${r.from}→VE${r.to}`).join(" ")}` : "";
+      const renumbered =
+        result.summary.renumberedVirtuals.length > 0
+          ? t("status.renumbered", { list: result.summary.renumberedVirtuals.map((r) => `VE${r.from}→VE${r.to}`).join(" ") })
+          : "";
       setStatus(
-        `3MF 내보냄: ${result.fileName} · 실물 ${result.summary.physicalExtruderCount} + 가상 ${result.summary.virtualCount} (VE ${result.summary.virtualIds.join(", ") || "-"}${renumbered}) · ${result.summary.printerConfigIncluded ? "템플릿 프린터 설정 포함" : "프린터 설정 제외"}`,
+        t("status.exported", {
+          file: result.fileName,
+          physical: result.summary.physicalExtruderCount,
+          virtual: result.summary.virtualCount,
+          ids: result.summary.virtualIds.join(", ") || "-",
+          renumbered,
+          config: result.summary.printerConfigIncluded ? t("status.configIncluded") : t("status.configOmitted"),
+        }),
       );
     } catch (err) {
-      setStatus(`내보내기 실패: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.exportFailed", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -504,15 +532,18 @@ export default function App() {
     try {
       const result = buildNomadObj(model, model.triangleColors, palette.map((entry) => entry.rgb), model.name);
       downloadText(result.fileName, result.obj);
-      setNomadReport({ message: `내보냄: ${result.fileName} · ${result.colourCount}색 · ${result.vertexCount.toLocaleString()}정점 · ${result.faceCount.toLocaleString()}면`, warnings: [] });
-      setStatus(`노마드용 OBJ 내보냄: ${result.fileName}`);
+      setNomadReport({
+        message: t("nomad.exported", { file: result.fileName, colours: result.colourCount, vertices: result.vertexCount.toLocaleString(), faces: result.faceCount.toLocaleString() }),
+        warnings: [],
+      });
+      setStatus(t("status.nomadExported", { file: result.fileName }));
     } catch (err) {
-      setStatus(`오류: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     }
   }
 
   async function nomadImport(file: File): Promise<void> {
-    setBusy("노마드 OBJ 읽는 중…");
+    setBusy(t("busy.readingNomad"));
     await yieldToUi();
     try {
       const parsed = parseNomadObj(await file.text());
@@ -529,12 +560,17 @@ export default function App() {
       } else {
         installModel(result.model, { kind: "nomad", fileName: file.name, uniqueColours: result.colourCount }, file);
       }
-      const message = `적용됨: ${result.mode === "colours-only" ? "색만 갱신 (형상 유지)" : "형상 교체"} · ${result.colourCount}색 · 팔레트 밖 정점 ${result.snap.offPaletteVertexCount.toLocaleString()} (최대 ΔE ${result.snap.maxDeltaE.toFixed(1)})`;
+      const message = t("nomad.applied", {
+        mode: result.mode === "colours-only" ? t("nomad.coloursOnly") : t("nomad.fullReload"),
+        colours: result.colourCount,
+        off: result.snap.offPaletteVertexCount.toLocaleString(),
+        max: result.snap.maxDeltaE.toFixed(1),
+      });
       setNomadReport({ message, warnings: result.warnings });
       setStatus(result.warnings[0] ? `${message} · ${result.warnings[0]}` : message);
     } catch (err) {
-      setNomadReport({ message: `오류: ${err instanceof Error ? err.message : String(err)}`, warnings: [] });
-      setStatus(`오류: ${err instanceof Error ? err.message : String(err)}`);
+      setNomadReport({ message: t("status.error", { message: err instanceof Error ? err.message : String(err) }), warnings: [] });
+      setStatus(t("status.error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -545,39 +581,43 @@ export default function App() {
   // ------------------------------------------------------------------
   function saveSettingsFile(): void {
     downloadTextFile("rodin-pipeline-settings.json", settingsToJson(settings));
-    setStatus("설정을 JSON으로 저장했습니다.");
+    setStatus(t("status.settingsSaved"));
   }
   async function loadSettingsFile(file: File): Promise<void> {
     try {
       setSettings(mergeSettings(JSON.parse(await file.text())));
-      setStatus(`설정 불러옴: ${file.name}`);
+      setStatus(t("status.settingsLoaded", { name: file.name }));
     } catch (err) {
-      setStatus(`설정 파일 오류: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(t("status.settingsFileError", { message: err instanceof Error ? err.message : String(err) }));
     }
   }
 
   const isBusy = busy !== null;
-  const modeLabel: Record<PreviewMode, string> = { source: "원본 색", palette: "팔레트", print: "출력 시뮬레이션" };
+  const modeLabel: Record<PreviewMode, string> = { source: t("view.source"), palette: t("view.palette"), print: t("view.print") };
   const viewLabels: Array<[ViewName, string]> = [
-    ["front", "앞"],
-    ["back", "뒤"],
-    ["left", "왼쪽"],
-    ["right", "오른쪽"],
-    ["top", "위"],
-    ["iso", "사선"],
+    ["front", t("view.front")],
+    ["back", t("view.back")],
+    ["left", t("view.left")],
+    ["right", t("view.right")],
+    ["top", t("view.top")],
+    ["iso", t("view.iso")],
   ];
 
   return (
+    <LangContext.Provider value={{ lang, setLang, t }}>
     <div className="app">
       <header className="topbar">
         <h1>Rodin Pipeline</h1>
-        <span className="sub">Rodin 3MF → 병합 → 컬러믹스 → PrusaSlicer 3MF · v{APP_VERSION}</span>
+        <span className="sub">{t("app.subtitle")} · v{APP_VERSION}</span>
         <span className="spacer" />
+        <button type="button" className="btn small lang-toggle" onClick={() => setLang(lang === "ko" ? "en" : "ko")} title="한국어 / English">
+          {t("app.language")}
+        </button>
         <button type="button" className="btn small" onClick={saveSettingsFile}>
-          설정 저장
+          {t("app.saveSettings")}
         </button>
         <label className="btn small">
-          설정 불러오기
+          {t("app.loadSettings")}
           <input
             type="file"
             accept=".json,application/json"
@@ -594,10 +634,10 @@ export default function App() {
           className="btn small"
           onClick={() => {
             setSettings(structuredClone(DEFAULT_SETTINGS));
-            setStatus("설정을 기본값으로 되돌렸습니다.");
+            setStatus(t("status.settingsReset"));
           }}
         >
-          기본값
+          {t("app.defaults")}
         </button>
       </header>
 
@@ -667,18 +707,18 @@ export default function App() {
         <section className="stage">
           <div className="stage-toolbar">
             <div className="group">
-              <span>보기</span>
+              <span>{t("view.mode")}</span>
               {(["source", "palette", "print"] as PreviewMode[]).map((mode) => (
                 <button key={mode} type="button" className={`btn small${previewMode === mode ? " active" : ""}`} onClick={() => setPreviewMode(mode)}>
                   {modeLabel[mode]}
                 </button>
               ))}
               <label className="inline" style={{ marginLeft: 8 }}>
-                <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> 팔레트 | 시뮬레이션 나란히
+                <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> {t("view.split")}
               </label>
             </div>
             <div className="group">
-              <span>방향</span>
+              <span>{t("view.direction")}</span>
               {viewLabels.map(([name, label]) => (
                 <button
                   key={name}
@@ -697,11 +737,11 @@ export default function App() {
           <div className={`viewers${split ? " split" : ""}`}>
             {split ? (
               <>
-                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} label="팔레트 (병합 결과)" />
-                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} label="출력 시뮬레이션 (실물 + 가상 혼합)" />
+                <MeshViewer positions={positions} colours={paletteColours} view={view} fitNonce={fitNonce} label={t("view.paletteLabel")} emptyLabel={t("view.empty")} />
+                <MeshViewer positions={positions} colours={printColours} view={view} fitNonce={fitNonce} label={t("view.printLabel")} emptyLabel={t("view.empty")} />
               </>
             ) : (
-              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} label={modeLabel[previewMode]} />
+              <MeshViewer positions={positions} colours={coloursForMode(previewMode)} view={view} fitNonce={fitNonce} label={modeLabel[previewMode]} emptyLabel={t("view.empty")} />
             )}
           </div>
           <div className="legend">
@@ -727,9 +767,10 @@ export default function App() {
       </div>
 
       <footer className={`statusbar${isBusy ? " busy" : ""}`} role="status" aria-live="polite">
-        <span className="label">{isBusy ? busy : "상태"}</span>
+        <span className="label">{isBusy ? busy : t("status.label")}</span>
         <span>{status}</span>
       </footer>
     </div>
+    </LangContext.Provider>
   );
 }

@@ -1,7 +1,8 @@
 import type { PaletteEntry } from "@core/types";
 import { rgbToHex } from "@core/colour";
 import { FILAMENT_PRESETS, MAX_PHYSICAL, MIN_PHYSICAL, type FilamentSettings } from "../engine/types";
-import { Row, Section, Swatch } from "./common";
+import { useT, type Key } from "../i18n";
+import { Row, Section } from "./common";
 
 export function FilamentSection({
   settings,
@@ -12,6 +13,7 @@ export function FilamentSection({
   onChange: (next: FilamentSettings) => void;
   palette: PaletteEntry[];
 }) {
+  const t = useT();
   const update = (patch: Partial<FilamentSettings>) => onChange({ ...settings, ...patch });
   const setHex = (i: number, hex: string) => {
     const next = [...settings.hex];
@@ -34,8 +36,8 @@ export function FilamentSection({
     update({ hex: next });
   };
   return (
-    <Section step={2} title="실물 필라멘트" badge={`${settings.count}개`}>
-      <Row label="실물 익스트루더 수" hint="XL 5T는 5. 실물 + 가상 합계는 15를 넘을 수 없습니다.">
+    <Section step={2} title={t("fil.title")} badge={t("fil.badge", { n: settings.count })}>
+      <Row label={t("fil.count")} hint={t("fil.countHint")}>
         <select value={settings.count} onChange={(e) => update({ count: Number(e.target.value) })}>
           {Array.from({ length: MAX_PHYSICAL - MIN_PHYSICAL + 1 }, (_v, i) => MIN_PHYSICAL + i).map((n) => (
             <option key={n} value={n}>
@@ -44,7 +46,7 @@ export function FilamentSection({
           ))}
         </select>
       </Row>
-      <Row label="프리셋">
+      <Row label={t("fil.preset")}>
         <select
           value=""
           onChange={(e) => {
@@ -55,31 +57,24 @@ export function FilamentSection({
             update({ hex: next, count: preset.hex.length });
           }}
         >
-          <option value="">선택…</option>
+          <option value="">{t("fil.choose")}</option>
           {FILAMENT_PRESETS.map((p) => (
             <option key={p.name} value={p.name}>
-              {p.label}
+              {t(`preset.${p.name}` as Key)}
             </option>
           ))}
         </select>
       </Row>
       <div className="filament-grid">
         {Array.from({ length: settings.count }, (_v, i) => (
-          <FilamentRow
-            key={i}
-            index={i}
-            hex={settings.hex[i]}
-            name={settings.names[i]}
-            onHex={(hex) => setHex(i, hex)}
-            onName={(name) => setName(i, name)}
-          />
+          <FilamentRow key={i} index={i} hex={settings.hex[i]} name={settings.names[i]} placeholder={t("fil.name")} onHex={(hex) => setHex(i, hex)} onName={(name) => setName(i, name)} />
         ))}
       </div>
       <div className="inline">
-        <button type="button" className="btn small" onClick={fillFromPalette} disabled={palette.length === 0} title="면적이 큰 팔레트 색부터 실물 슬롯에 채웁니다.">
-          모델 팔레트에서 채우기
+        <button type="button" className="btn small" onClick={fillFromPalette} disabled={palette.length === 0} title={t("fil.fillHint")}>
+          {t("fil.fillFromPalette")}
         </button>
-        <span className="muted">실제 필라멘트의 색을 hex로 넣을수록 혼합 예측이 정확해집니다.</span>
+        <span className="muted">{t("fil.hexNote")}</span>
       </div>
     </Section>
   );
@@ -89,12 +84,14 @@ function FilamentRow({
   index,
   hex,
   name,
+  placeholder,
   onHex,
   onName,
 }: {
   index: number;
   hex: string;
   name: string;
+  placeholder: string;
   onHex: (hex: string) => void;
   onName: (name: string) => void;
 }) {
@@ -104,21 +101,18 @@ function FilamentRow({
       <span className="cell-colour">
         <input type="color" value={hex} onChange={(e) => onHex(e.target.value)} />
       </span>
-      <input type="text" value={name} onChange={(e) => onName(e.target.value)} placeholder="필라멘트 이름" />
+      <input type="text" value={name} onChange={(e) => onName(e.target.value)} placeholder={placeholder} />
       <input
         type="text"
-        value={hex}
-        onChange={(e) => {
-          const v = e.target.value.trim();
-          if (/^#[0-9a-fA-F]{6}$/.test(v)) onHex(v);
-        }}
+        defaultValue={hex}
+        key={hex}
         onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (!/^#[0-9a-fA-F]{6}$/.test(v)) e.target.value = hex;
+          const v = e.target.value.trim().toUpperCase();
+          if (/^#[0-9A-F]{6}$/.test(v)) onHex(v);
+          else e.target.value = hex;
         }}
         style={{ width: 90, fontFamily: "monospace" }}
       />
-      <Swatch hex={hex} size={0} />
     </>
   );
 }

@@ -4,10 +4,13 @@ Rodin Face Color 3MF를 넣고, 필라멘트·병합·컬러믹스 수치를 한
 Color Mix Lab(`../color-mix-lab/src/workflows/vertex/core`)을 계산 엔진으로 import해서 쓰고, UI는 이 폴더에만 있습니다.
 
 ```bash
-npm install            # 저장소 루트에서
-npm run dev:pipeline   # 또는 cd rodin-pipeline && npm run dev
+npm install            # 저장소 루트에서 / once, at the repo root
+npm run dev:pipeline   # http://localhost:5173/  (또는 cd rodin-pipeline && npm run dev)
 npm run build -w rodin-pipeline
 ```
+
+UI는 한국어/영어를 지원합니다(우상단 **English / 한국어** 버튼, 브라우저에 기억됨). 브라우저 언어가 한국어면 한국어로 시작합니다.
+*The UI is bilingual: the **English / 한국어** button in the top bar switches language and the choice is remembered. Korean browsers start in Korean, everything else in English. All strings live in `src/i18n.ts`.*
 
 ## 화면 구성
 
@@ -37,3 +40,9 @@ npm run build -w rodin-pipeline
 - `npm test`(엔진 단위 테스트 41개) 통과.
 - Playwright로 빌드된 앱을 실제 브라우저에서 구동: 합성 Rodin 3MF 로드 → 프리셋 → #D6C0C3, #7D727A를 살색에 병합(살색 33.2% → 단순 병합 38.0% → 재판정 34.9%, 흰색 31.8% → 35.0%) → 되돌리기 → 3MF 내보내기(연속 VE, `Slic3r_PE.config` 없음, PNG 썸네일) → 노마드 OBJ 왕복 → 새로고침 후 설정 유지, 콘솔 오류 0건.
 - 실제 70만 면 Rodin 파일과 PrusaSlicer 실기 확인은 아직입니다.
+
+---
+
+## English summary
+
+**Rodin Pipeline** is the one-screen app for the Rodin → PrusaSlicer full-colour workflow. Load a Rodin Face Color 3MF (or vertex-colour OBJ), set the physical filaments, merge palette colours with shade re-judgement and cleanup, tune the colour-mix numbers (thirds recipes and 2 colours per mixture by default, Prusa FDM mixer, physical-direct rule for black/white), watch the palette and print simulation side by side in the Three.js viewer, and export a PrusaSlicer Full Spectrum 3MF with contiguous virtual extruder ids and no `Slic3r_PE.config` (so your XL profile stays untouched). The Nomad round trip (export/import of an N-colour vertex OBJ with CIEDE2000 snapping) lives in the Export panel. All settings persist in the browser and can be saved/loaded as JSON. The computation is the Color Mix Lab core in `../color-mix-lab/src/workflows/vertex/core`.

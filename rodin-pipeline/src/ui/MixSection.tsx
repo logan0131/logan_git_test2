@@ -2,6 +2,7 @@ import type { PaletteEntry, PhysicalSlot, RGB } from "@core/types";
 import { rgbToHex } from "@core/colour";
 import type { VirtualBlendEntry, VirtualExtruderPlan } from "@core/virtualExtruders";
 import type { MixSettings } from "../engine/types";
+import { useT } from "../i18n";
 import { NumberField, Row, Section, Swatch } from "./common";
 
 export interface PhysicalDirectSuggestion {
@@ -49,6 +50,7 @@ export function MixSection({
   manualPhysical: Record<string, number>;
   onManualPhysical: (paletteIndex: number, extruder: number | null) => void;
 }) {
+  const t = useT();
   const set = (patch: Partial<MixSettings>) => onChange({ ...settings, ...patch });
   const slotRgb = new Map(slots.map((slot) => [slot.slot, slot.filament.effectiveRgb]));
   const virtualCount = plan?.virtualBlends.length ?? 0;
@@ -56,22 +58,22 @@ export function MixSection({
   const physicalOnlyMode = settings.assignmentMode === "physical-only";
 
   return (
-    <Section step={4} title="컬러믹스 수치" badge={plan ? `실물 ${slots.length} + 가상 ${virtualCount} = ${total}${total > 15 ? " ⚠" : ""}` : "모델 없음"}>
-      <Row label="색 배정 방식">
+    <Section step={4} title={t("mix.title")} badge={plan ? `${t("mix.badge", { p: slots.length, v: virtualCount, t: total })}${total > 15 ? " ⚠" : ""}` : t("load.noModel")}>
+      <Row label={t("mix.assignmentMode")}>
         <select value={settings.assignmentMode} onChange={(e) => set({ assignmentMode: e.target.value as MixSettings["assignmentMode"] })}>
-          <option value="physical-and-virtual">실물 + 가상 혼합</option>
-          <option value="physical-only">실물만</option>
+          <option value="physical-and-virtual">{t("mix.physicalAndVirtual")}</option>
+          <option value="physical-only">{t("mix.physicalOnly")}</option>
         </select>
       </Row>
-      <Row label="혼합당 최대 색 수" hint="2색 기본: 층 교대 주기가 짧아 줄무늬가 덜 보입니다.">
+      <Row label={t("mix.maxComponents")} hint={t("mix.maxComponentsHint")}>
         <select value={settings.maxComponents} disabled={physicalOnlyMode} onChange={(e) => set({ maxComponents: Number(e.target.value) === 3 ? 3 : 2 })}>
-          <option value={2}>2색</option>
-          <option value={3}>3색</option>
+          <option value={2}>{t("mix.colours2")}</option>
+          <option value={3}>{t("mix.colours3")}</option>
         </select>
       </Row>
-      <Row label="혼합 비율 해상도" hint="5% 단위는 20층 주기(0.05 mm 층에서 1 mm마다 줄). thirds 또는 25%를 권장합니다.">
+      <Row label={t("mix.resolution")} hint={t("mix.resolutionHint")}>
         <select value={settings.recipeResolution} disabled={physicalOnlyMode} onChange={(e) => set({ recipeResolution: e.target.value as MixSettings["recipeResolution"] })}>
-          <option value="thirds">Thirds only (권장)</option>
+          <option value="thirds">{t("mix.thirds")}</option>
           <option value="half-thirds">50% + thirds</option>
           <option value="grid25">25% + thirds</option>
           <option value="grid20">20% + thirds</option>
@@ -79,42 +81,42 @@ export function MixSection({
           <option value="grid5">5% + thirds</option>
         </select>
       </Row>
-      <Row label="혼합 모델">
+      <Row label={t("mix.model")}>
         <select value={settings.mixPriority} disabled={physicalOnlyMode} onChange={(e) => set({ mixPriority: e.target.value as MixSettings["mixPriority"] })}>
-          <option value="accurate">Prusa FDM mixer</option>
-          <option value="preserve-hue">Prusa FDM + 색상 보존</option>
-          <option value="avoid-muddy">Prusa FDM + 포인트 분리</option>
+          <option value="accurate">{t("mix.modelAccurate")}</option>
+          <option value="preserve-hue">{t("mix.modelHue")}</option>
+          <option value="avoid-muddy">{t("mix.modelAccent")}</option>
         </select>
       </Row>
-      <Row label="매핑 전략">
+      <Row label={t("mix.mapping")}>
         <select value={settings.mappingStrategy} onChange={(e) => set({ mappingStrategy: e.target.value as MixSettings["mappingStrategy"] })}>
-          <option value="closest">가장 가까운 색</option>
-          <option value="smooth">부드러운 전환</option>
-          <option value="preserve-hue">색상 우선</option>
-          <option value="preserve-accent">포인트 우선</option>
-          <option value="warm-neutral">따뜻한/중립 보존</option>
+          <option value="closest">{t("mix.mapClosest")}</option>
+          <option value="smooth">{t("mix.mapSmooth")}</option>
+          <option value="preserve-hue">{t("mix.mapHue")}</option>
+          <option value="preserve-accent">{t("mix.mapAccent")}</option>
+          <option value="warm-neutral">{t("mix.mapWarm")}</option>
         </select>
       </Row>
-      <Row label="색차 기준">
+      <Row label={t("mix.metric")}>
         <select value={settings.colourDifferenceMetric} onChange={(e) => set({ colourDifferenceMetric: e.target.value as MixSettings["colourDifferenceMetric"] })}>
           <option value="ciede2000">CIEDE2000 (ΔE00)</option>
           <option value="cie76">CIE76 (ΔE76)</option>
         </select>
       </Row>
-      <Row label="포인트 색 보존">
+      <Row label={t("mix.accent")}>
         <select value={settings.accentProtection} onChange={(e) => set({ accentProtection: e.target.value as MixSettings["accentProtection"] })}>
-          <option value="off">끔</option>
-          <option value="balanced">보통</option>
-          <option value="strong">강함</option>
+          <option value="off">{t("mix.accentOff")}</option>
+          <option value="balanced">{t("mix.accentBalanced")}</option>
+          <option value="strong">{t("mix.accentStrong")}</option>
         </select>
       </Row>
-      <Row label="미리보기 밝기 보정 (L*)" hint="가상 혼합 색의 미리보기 밝기. 출력 파일에는 영향 없음.">
+      <Row label={t("mix.lightness")} hint={t("mix.lightnessHint")}>
         <NumberField value={settings.previewLightnessOffset} min={-90} max={30} step={2} onChange={(v) => set({ previewLightnessOffset: v })} />
       </Row>
-      <Row label="실물 단독 판정 비율" hint="지배 성분 비율이 이 값 이상이면 가상 대신 실물 익스트루더로 보냅니다.">
+      <Row label={t("mix.pureThreshold")} hint={t("mix.pureThresholdHint")}>
         <NumberField value={settings.purePhysicalThreshold} min={0.5} max={1} step={0.005} onChange={(v) => set({ purePhysicalThreshold: v })} />
       </Row>
-      <Row label="실물 직결 자동 (ΔE00 미만)" hint="팔레트 색이 실물 필라멘트 색과 이 값보다 가까우면 자동으로 실물로 보냅니다 (검정/흰색 등).">
+      <Row label={t("mix.autoDirect")} hint={t("mix.autoDirectHint")}>
         <input type="checkbox" checked={settings.autoPhysicalDirect} onChange={(e) => set({ autoPhysicalDirect: e.target.checked })} />
         <NumberField value={settings.physicalDirectDeltaE} min={0} max={30} step={0.5} width={64} onChange={(v) => set({ physicalDirectDeltaE: v })} />
       </Row>
@@ -122,19 +124,23 @@ export function MixSection({
       {plan && palette.length > 0 && (
         <>
           <div className="muted">
-            평균 ΔE {plan.mappingDiagnostics.averageError.toFixed(1)} · 최악 ΔE {plan.mappingDiagnostics.worstError.toFixed(1)} · 미흡{" "}
-            {plan.mappingDiagnostics.poorMatchCount}/{plan.mappingDiagnostics.targetPaletteCount}
-            {total > 15 && <span className="danger"> · 실물 + 가상 {total} &gt; 15: 색을 더 합치거나 실물로 보내세요.</span>}
+            {t("mix.diagnostics", {
+              a: plan.mappingDiagnostics.averageError.toFixed(1),
+              w: plan.mappingDiagnostics.worstError.toFixed(1),
+              n: plan.mappingDiagnostics.poorMatchCount,
+              m: plan.mappingDiagnostics.targetPaletteCount,
+            })}
+            {total > 15 && <span className="danger">{t("mix.overLimit", { t: total })}</span>}
           </div>
           <div className="table-wrap">
             <table className="grid">
               <thead>
                 <tr>
-                  <th>익스트루더</th>
-                  <th>색</th>
-                  <th>구성</th>
-                  <th>층 순서</th>
-                  <th>팔레트</th>
+                  <th>{t("mix.extruder")}</th>
+                  <th>{t("mix.colour")}</th>
+                  <th>{t("mix.recipe")}</th>
+                  <th>{t("mix.layerOrder")}</th>
+                  <th>{t("mix.palette")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,7 +173,7 @@ export function MixSection({
                         <code>{rgbToHex(entry.physicalRgb)}</code>
                       </span>
                     </td>
-                    <td>실물 100%</td>
+                    <td>{t("mix.physical100")}</td>
                     <td>
                       <SequenceBar sequence={[entry.physicalExtruder]} slotRgb={slotRgb} />
                     </td>
@@ -178,14 +184,14 @@ export function MixSection({
             </table>
           </div>
           <details>
-            <summary className="muted">팔레트 색별 실물 직결 지정</summary>
+            <summary className="muted">{t("mix.forceTitle")}</summary>
             <div className="table-wrap" style={{ marginTop: 6 }}>
               <table className="grid">
                 <thead>
                   <tr>
-                    <th>팔레트</th>
-                    <th>추천</th>
-                    <th>지정</th>
+                    <th>{t("mix.palette")}</th>
+                    <th>{t("mix.suggested")}</th>
+                    <th>{t("mix.assignment")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -202,7 +208,7 @@ export function MixSection({
                         <td>{suggestion ? <span className="badge">→ E{suggestion.extruder} (ΔE {suggestion.deltaE.toFixed(1)})</span> : <span className="muted">-</span>}</td>
                         <td>
                           <select value={manual ?? ""} onChange={(e) => onManualPhysical(entry.index, e.target.value ? Number(e.target.value) : null)}>
-                            <option value="">{suggestion && settings.autoPhysicalDirect ? `자동 (E${suggestion.extruder})` : "자동 (가상 허용)"}</option>
+                            <option value="">{suggestion && settings.autoPhysicalDirect ? t("mix.autoWith", { n: suggestion.extruder }) : t("mix.autoVirtual")}</option>
                             {slots.map((slot) => (
                               <option key={slot.slot} value={slot.slot}>
                                 E{slot.slot} {rgbToHex(slot.filament.rgb)}

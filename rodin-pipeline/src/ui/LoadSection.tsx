@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { MeshModel, PaletteEntry } from "@core/types";
 import type { Template3mfInfo } from "@core/template3mf";
 import { rgbToHex } from "@core/colour";
+import { useT } from "../i18n";
 import { Section, Swatch, pct } from "./common";
 
 export interface SourceInfo {
@@ -85,40 +86,35 @@ export function LoadSection({
   palette: PaletteEntry[];
   areaByIndex: Map<number, number>;
 }) {
+  const t = useT();
   const rodin = sourceInfo?.rodin;
   return (
-    <Section step={1} title="불러오기" badge={model ? `${model.stats.triangleCount.toLocaleString()} 면` : "모델 없음"}>
-      <Dropzone
-        accept=".3mf,.obj"
-        title="Rodin 3D Print 3MF (Face Color) 또는 정점색 OBJ"
-        hint="여기에 끌어다 놓거나 클릭해서 선택. Rodin은 Output Mode를 Face Color로 받은 3MF만 됩니다."
-        disabled={busy}
-        onFile={onModelFile}
-      />
+    <Section step={1} title={t("load.title")} badge={model ? t("load.faces", { n: model.stats.triangleCount.toLocaleString() }) : t("load.noModel")}>
+      <Dropzone accept=".3mf,.obj" title={t("load.dropTitle")} hint={t("load.dropHint")} disabled={busy} onFile={onModelFile} />
       {model && sourceInfo && (
         <div className="note">
           <div className="stats">
-            <span>파일</span>
+            <span>{t("load.file")}</span>
             <b title={sourceInfo.fileName}>{sourceInfo.fileName}</b>
-            <span>면 / 정점</span>
+            <span>{t("load.facesVertices")}</span>
             <b>
               {model.stats.triangleCount.toLocaleString()} / {model.stats.vertexCount.toLocaleString()}
             </b>
-            <span>면 색 고유값</span>
+            <span>{t("load.uniqueColours")}</span>
             <b>{sourceInfo.uniqueColours}</b>
             {rodin && (
               <>
-                <span>Rodin 팔레트</span>
+                <span>{t("load.rodinPalette")}</span>
                 <b>
-                  {rodin.paletteCount}색 중 {rodin.usedColourCount}색 사용
-                  {rodin.paletteSource === "fallback" ? " (팔레트 없음 → 임시 색)" : ""}
+                  {t("load.paletteUsed", { count: rodin.paletteCount, used: rodin.usedColourCount })}
+                  {rodin.paletteSource === "fallback" ? t("load.paletteFallback") : ""}
                 </b>
               </>
             )}
             {rodin && rodin.unpaintedTriangleCount > 0 && (
               <>
-                <span>미칠 면</span>
-                <b className="warn">{rodin.unpaintedTriangleCount.toLocaleString()} (1번으로 처리)</b>
+                <span>{t("load.unpainted")}</span>
+                <b className="warn">{t("load.unpaintedValue", { n: rodin.unpaintedTriangleCount.toLocaleString() })}</b>
               </>
             )}
           </div>
@@ -126,7 +122,7 @@ export function LoadSection({
             <div className="swatch-row" style={{ marginTop: 6 }}>
               {rodin.paletteHex.map((hex, i) => {
                 const used = rodin.usedPaletteNumbers.includes(i + 1);
-                return <Swatch key={`${hex}-${i}`} hex={hex} title={`E${i + 1} ${hex}${used ? "" : " (미사용)"}`} size={20} />;
+                return <Swatch key={`${hex}-${i}`} hex={hex} title={`E${i + 1} ${hex}${used ? "" : ` ${t("load.unused")}`}`} size={20} />;
               })}
             </div>
           )}
@@ -143,9 +139,9 @@ export function LoadSection({
             <thead>
               <tr>
                 <th>#</th>
-                <th>색</th>
-                <th>면적</th>
-                <th>면 수</th>
+                <th>{t("load.colour")}</th>
+                <th>{t("load.area")}</th>
+                <th>{t("load.faceCount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -167,23 +163,23 @@ export function LoadSection({
         </div>
       )}
       <details>
-        <summary className="muted">PrusaSlicer 3MF 템플릿 (선택, 베드 크기 / 프린터 설정용)</summary>
+        <summary className="muted">{t("load.templateSummary")}</summary>
         <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
           <Dropzone
             accept=".3mf"
-            title={templateInfo ? `템플릿: ${templateInfo.fileName}` : "템플릿 3MF 선택"}
-            hint="PrusaSlicer에서 XL 프로필로 저장한 빈 프로젝트를 넣으면 베드 크기를 가져옵니다. 프린터 설정 파일은 기본으로 넣지 않습니다."
+            title={templateInfo ? t("load.templateNamed", { name: templateInfo.fileName }) : t("load.templateChoose")}
+            hint={t("load.templateHint")}
             disabled={busy}
             onFile={onTemplateFile}
           />
           {templateInfo && (
             <div className="inline">
               <span className="muted">
-                베드 {templateInfo.bedSize ? `${templateInfo.bedSize.x.toFixed(0)} × ${templateInfo.bedSize.y.toFixed(0)} mm` : "정보 없음"} ·{" "}
-                {templateInfo.configFound ? "Slic3r_PE.config 있음" : "설정 파일 없음"}
+                {templateInfo.bedSize ? t("load.bed", { x: templateInfo.bedSize.x.toFixed(0), y: templateInfo.bedSize.y.toFixed(0) }) : t("load.noBed")} ·{" "}
+                {templateInfo.configFound ? t("load.configFound") : t("load.noConfig")}
               </span>
               <button type="button" className="btn small" onClick={onClearTemplate}>
-                템플릿 제거
+                {t("load.removeTemplate")}
               </button>
             </div>
           )}

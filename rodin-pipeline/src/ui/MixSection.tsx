@@ -1,4 +1,5 @@
 import { MAX_PAINTABLE_EXTRUDER_ID } from "@core/paintCodes";
+import { blendRecipeText } from "../engine/plan";
 import type { PaletteEntry, PhysicalSlot, RGB } from "@core/types";
 import { rgbToHex } from "@core/colour";
 import type { VirtualBlendEntry, VirtualExtruderPlan } from "@core/virtualExtruders";
@@ -13,14 +14,7 @@ export interface PhysicalDirectSuggestion {
 }
 
 function componentText(entry: VirtualBlendEntry): string {
-  const total = Math.max(1, entry.sequence.length);
-  return entry.components
-    .map((c) => {
-      const pctValue = (c.count / total) * 100;
-      const text = total === 3 && c.count === 1 ? "33%" : `${Math.round(pctValue)}%`;
-      return `E${c.extruder} ${text}`;
-    })
-    .join(" + ");
+  return blendRecipeText(entry);
 }
 
 function SequenceBar({ sequence, slotRgb }: { sequence: number[]; slotRgb: Map<number, RGB> }) {

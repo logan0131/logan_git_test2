@@ -70,6 +70,7 @@ import {
 import { MeshViewer, type HighlightOverlay, type MeshViewerHandle, type PickInfo, type ViewerHit } from "./ui/MeshViewer";
 import { ColourMap, type ColourMapHandle } from "./ui/ColourMap";
 import { loadStoredBackground, storeBackground, type ViewBackground } from "./ui/background";
+import { blendRecipeText } from "./engine/plan";
 import { buildFaceAtlas, faceAtlasCentre, type AtlasMasks, type FaceAtlas } from "./engine/atlas";
 import { HelpTip } from "./ui/HelpTip";
 import { LoadSection, type SourceInfo } from "./ui/LoadSection";
@@ -82,7 +83,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.6";
+const APP_VERSION = "0.4.7";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -127,6 +128,7 @@ export default function App() {
   const [model, setModel] = useState<MeshModel | null>(null);
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
   const [history, setHistory] = useState<RGB[][]>([]);
+  const [future, setFuture] = useState<RGB[][]>([]);
   const [template, setTemplate] = useState<{ info: Template3mfInfo; buffer: ArrayBuffer } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState(() => translate(loadStoredLang(), "status.ready"));
@@ -370,6 +372,22 @@ export default function App() {
     return map;
   }, [plan]);
 
+  /** Which extruder each palette colour prints with, for labels ("VE13 · E2 67% + E4 33%"). */
+  const extruderInfoByIndex = useMemo(() => {
+    const map = new Map<number, { label: string; rgb: RGB; recipe: string }>();
+    if (!plan) return map;
+    for (const entry of plan.virtualBlends) for (const i of entry.targetPaletteIndices) map.set(i, { label: `VE${entry.virtualId}`, rgb: entry.displayRgb, recipe: blendRecipeText(entry) });
+    for (const entry of plan.physicalOnly) {
+      const name = settings.filaments.names[entry.physicalExtruder - 1] ?? "";
+      for (const i of entry.targetPaletteIndices) map.set(i, { label: `E${entry.physicalExtruder}`, rgb: entry.physicalRgb, recipe: name });
+    }
+    return map;
+  }, [plan, settings.filaments.names]);
+  const extruderText = (paletteIndex: number): string => {
+    const info = extruderInfoByIndex.get(paletteIndex);
+    return info ? (info.recipe ? `${info.label} (${info.recipe})` : info.label) : "-";
+  };
+
   const sourceColours = useMemo(() => (model ? buildColourBuffer(model.triangles.length, (i) => model.triangleColors[i]) : null), [model]);
   const paletteColours = useMemo(
     () => (model && palette.length > 0 ? buildColourBuffer(model.triangles.length, (i) => palette[labels[i]]?.rgb ?? model.triangleColors[i]) : sourceColours),
@@ -461,6 +479,17 @@ export default function App() {
   const pickedFaceCount = useMemo(() => pickedPatches.reduce((sum, patch) => sum + patch.faces.length, 0), [pickedPatches]);
   const pickedFraction = useMemo(() => pickedPatches.reduce((sum, patch) => sum + patch.fraction, 0), [pickedPatches]);
   const pickedHexes = useMemo(() => [...new Set(pickedPatches.map((patch) => patch.hex))], [pickedPatches]);
+  const pickedExtruders = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ label: string; rgb: RGB; recipe: string; hex: string }> = [];
+    for (const patch of pickedPatches) {
+      const info = extruderInfoByIndex.get(patch.index);
+      if (!info || seen.has(info.label)) continue;
+      seen.add(info.label);
+      out.push({ ...info, hex: patch.hex });
+    }
+    return out;
+  }, [pickedPatches, extruderInfoByIndex]);
 
   const overlays = useMemo(
     () => [selectedOverlay, hoverOverlay, pickedOverlay].filter((o): o is HighlightOverlay => o !== null),
@@ -619,7 +648,7 @@ export default function App() {
         if (!exists) focusPatch(patch, info.source, faceIndex);
       } else {
         setPickedPatches([patch]);
-        setStatus(t("status.picked", { index: patch.index, hex: patch.hex, n: patch.faces.length.toLocaleString(), pct: pct(patch.fraction) }));
+        setStatus(t("status.picked", { index: patch.index, hex: patch.hex, n: patch.faces.length.toLocaleString(), pct: pct(patch.fraction), extruder: extruderText(patch.index) }));
         focusPatch(patch, info.source, faceIndex);
       }
       setPickTarget("");
@@ -830,6 +859,7 @@ export default function App() {
     originalColoursRef.current = options?.original ?? next.triangleColors;
     lastSavedColoursRef.current = next.triangleColors;
     setHistory(options?.history ?? []);
+    setFuture([]);
     setWorkRestored(options?.restored ?? false);
     setMergeReport(null);
     setNomadReport(null);
@@ -905,6 +935,8 @@ export default function App() {
     lastSavedColoursRef.current = colours;
     if (!settings.rememberWork) return;
     const generation = loadGenerationRef.current;
+    // Show "saving" as soon as a change is pending, not only when the debounce fires.
+    setAutosave({ state: "saving", at: null });
     const timer = window.setTimeout(() => void persistWorkColours(colours, generation), 400);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -989,6 +1021,7 @@ export default function App() {
     setModel(null);
     setSourceInfo(null);
     setHistory([]);
+    setFuture([]);
     setWorkRestored(false);
     setMergeReport(null);
     setNomadReport(null);
@@ -1026,7 +1059,8 @@ export default function App() {
   }
 
   function applyColours(current: MeshModel, next: RGB[], options?: { keepSelection?: boolean }): void {
-    setHistory((prev) => [...prev.slice(-9), current.triangleColors]);
+    setHistory((prev) => [...prev.slice(-19), current.triangleColors]);
+    setFuture([]);
     setModel({ ...current, triangleColors: next, stats: { ...current.stats, uniqueFaceColors: countUniqueColours(next) } });
     setSettings((prev) => ({ ...prev, manualPhysical: {} }));
     if (!options?.keepSelection) clearPick();
@@ -1221,19 +1255,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brushMode, brushRadius, brushBounds]);
 
-  // Ctrl/Cmd+Z undoes the last colour change.
+  // Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes the last colour change.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || event.shiftKey) return;
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      const isUndo = key === "z" && !event.shiftKey;
+      const isRedo = (key === "z" && event.shiftKey) || key === "y";
+      if (!isUndo && !isRedo) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       event.preventDefault();
-      undoMerge();
+      if (isUndo) undoMerge();
+      else redo();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [history, model]);
+  }, [history, future, model]);
 
   async function runMerge(flagsOverride?: Record<string, MergeFlag>): Promise<void> {
     if (!model || palette.length === 0) return;
@@ -1323,10 +1362,20 @@ export default function App() {
   function undoMerge(): void {
     const last = history[history.length - 1];
     if (!model || !last || last.length !== model.triangles.length) return;
+    setFuture((prev) => [...prev.slice(-19), model.triangleColors]);
     setModel({ ...model, triangleColors: last, stats: { ...model.stats, uniqueFaceColors: countUniqueColours(last) } });
     setHistory((prev) => prev.slice(0, -1));
     setMergeReport(null);
-    setStatus(t("status.undone"));
+    setStatus(t("status.undone", { n: history.length - 1 }));
+  }
+
+  function redo(): void {
+    const next = future[future.length - 1];
+    if (!model || !next || next.length !== model.triangles.length) return;
+    setHistory((prev) => [...prev.slice(-19), model.triangleColors]);
+    setModel({ ...model, triangleColors: next, stats: { ...model.stats, uniqueFaceColors: countUniqueColours(next) } });
+    setFuture((prev) => prev.slice(0, -1));
+    setStatus(t("status.redone", { n: future.length - 1 }));
   }
 
   // ------------------------------------------------------------------
@@ -1668,6 +1717,14 @@ export default function App() {
               <label className="inline" style={{ marginLeft: 8 }}>
                 <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> {t("view.split")}
               </label>
+              <span className="group history-group">
+                <button type="button" className="btn small undo-btn" disabled={isBusy || history.length === 0} onClick={undoMerge} title={t("app.undoHint")}>
+                  ↶ {t("app.undo")}{history.length > 0 ? ` (${history.length})` : ""}
+                </button>
+                <button type="button" className="btn small redo-btn" disabled={isBusy || future.length === 0} onClick={redo} title={t("app.redoHint")}>
+                  ↷ {t("app.redo")}{future.length > 0 ? ` (${future.length})` : ""}
+                </button>
+              </span>
               <span className="bg-controls" title={t("view.backgroundHint")}>
                 <span>{t("view.background")}</span>
                 <label className="inline checker-toggle">
@@ -1761,13 +1818,26 @@ export default function App() {
             <div className="pick-panel">
               {pickedPatches.length > 0 || shownHex ? (
                 <>
-                  <b>{t("pick.title", { n: pickedPatches.length })}</b>
+                  <b className="pick-title">{t("pick.title", { n: pickedPatches.length })}</b>
                   <span className="cell-colour">
                     {pickedHexes.slice(0, 8).map((hex) => (
                       <Swatch key={hex} hex={hex} size={14} title={hex} />
                     ))}
                     {pickedHexes.length === 1 && <code>{pickedHexes[0]}</code>}
                   </span>
+                  {pickedExtruders.length > 0 && (
+                    <span className="pick-extruders" title={t("pick.extruderHint")}>
+                      <span className="muted">→ {t("pick.extruder")}</span>
+                      {pickedExtruders.slice(0, 4).map((info) => (
+                        <span key={info.label} className="pick-extruder">
+                          <Swatch rgb={info.rgb} size={14} />
+                          <b>{info.label}</b>
+                          {info.recipe && <span className="muted">{info.recipe}</span>}
+                        </span>
+                      ))}
+                      {pickedExtruders.length > 4 && <span className="muted">+{pickedExtruders.length - 4}</span>}
+                    </span>
+                  )}
                   <span className="muted">{t("pick.faces", { n: pickedFaceCount.toLocaleString(), pct: pct(pickedFraction) })}</span>
                   {shownHex && (
                     <span className="pick-colour-mode">

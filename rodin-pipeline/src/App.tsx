@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { MeshModel, PaletteEntry, PhysicalSlot, RGB } from "@core/types";
 import { rgbToHex } from "@core/colour";
 import { medianCutPalette } from "@core/quantize";
@@ -54,7 +54,7 @@ import { Swatch, pct } from "./ui/common";
 import { ColourSelect } from "./ui/ColourSelect";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.2.2";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -91,6 +91,15 @@ export default function App() {
   const [pickCustom, setPickCustom] = useState("#FF0000");
   const hoverTimerRef = useRef<number | null>(null);
   const templateRestoredRef = useRef(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const stored = Number(window.localStorage.getItem("rodin-pipeline-sidebar-width"));
+      return Number.isFinite(stored) && stored >= 320 ? stored : 470;
+    } catch {
+      return 470;
+    }
+  });
+  const [splitterDragging, setSplitterDragging] = useState(false);
   const adjacencyRef = useRef<{ triangles: MeshModel["triangles"]; adjacency: FaceAdjacency } | null>(null);
   const modelFileRef = useRef<File | null>(null);
 
@@ -749,6 +758,32 @@ export default function App() {
     }
   }
 
+  function startSplitterDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    setSplitterDragging(true);
+    const onMove = (move: PointerEvent) => {
+      const next = Math.max(320, Math.min(Math.round(window.innerWidth * 0.75), startWidth + (move.clientX - startX)));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setSplitterDragging(false);
+      setSidebarWidth((width) => {
+        try {
+          window.localStorage.setItem("rodin-pipeline-sidebar-width", String(width));
+        } catch {
+          // ignore
+        }
+        return width;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   const isBusy = busy !== null;
   const modeLabel: Record<PreviewMode, string> = { source: t("view.source"), palette: t("view.palette"), print: t("view.print") };
   const viewLabels: Array<[ViewName, string]> = [
@@ -798,7 +833,7 @@ export default function App() {
         </button>
       </header>
 
-      <div className="main">
+      <div className="main" style={{ "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}>
         <aside className="sidebar">
           <LoadSection
             model={model}
@@ -874,6 +909,19 @@ export default function App() {
             }}
           />
         </aside>
+        <div
+          className={`splitter${splitterDragging ? " dragging" : ""}`}
+          title={t("layout.splitter")}
+          onPointerDown={startSplitterDrag}
+          onDoubleClick={() => {
+            setSidebarWidth(470);
+            try {
+              window.localStorage.setItem("rodin-pipeline-sidebar-width", "470");
+            } catch {
+              // ignore
+            }
+          }}
+        />
 
         <section className="stage">
           <div className="stage-toolbar">
@@ -986,7 +1034,7 @@ export default function App() {
 
       <footer className={`statusbar${isBusy ? " busy" : ""}`} role="status" aria-live="polite">
         <span className="label">{isBusy ? busy : t("status.label")}</span>
-        <span>{status}</span>
+        <span className="message" title={status}>{status}</span>
       </footer>
     </div>
     </LangContext.Provider>

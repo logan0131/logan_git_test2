@@ -251,6 +251,7 @@ const ko = {
   "legend.hover": "마우스 오버",
   "legend.selected": "선택한 색",
   "legend.picked": "선택한 묶음",
+  "layout.splitter": "드래그: 패널 너비 조절 · 더블클릭: 기본 너비",
 };
 
 export type Key = keyof typeof ko;
@@ -495,6 +496,7 @@ const en: Record<Key, string> = {
   "legend.hover": "hover",
   "legend.selected": "selected colours",
   "legend.picked": "selected patch",
+  "layout.splitter": "Drag to resize the panel · double-click to reset",
 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { ko, en };

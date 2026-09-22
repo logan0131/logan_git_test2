@@ -66,6 +66,7 @@ import {
 } from "./engine/storage";
 import { MeshViewer, type HighlightOverlay, type MeshViewerHandle, type PickInfo, type ViewerHit } from "./ui/MeshViewer";
 import { ColourMap, type ColourMapHandle } from "./ui/ColourMap";
+import { loadStoredBackground, storeBackground, type ViewBackground } from "./ui/background";
 import { buildFaceAtlas, faceAtlasCentre, type AtlasMasks, type FaceAtlas } from "./engine/atlas";
 import { HelpTip } from "./ui/HelpTip";
 import { LoadSection, type SourceInfo } from "./ui/LoadSection";
@@ -78,7 +79,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.4";
+const APP_VERSION = "0.4.5";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -130,6 +131,11 @@ export default function App() {
   const [nomadReport, setNomadReport] = useState<{ message: string; warnings: string[] } | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("palette");
   const [split, setSplit] = useState(true);
+  const [background, setBackgroundState] = useState<ViewBackground>(() => loadStoredBackground());
+  const setBackground = (next: ViewBackground) => {
+    setBackgroundState(next);
+    storeBackground(next);
+  };
   const [showMap, setShowMapState] = useState<boolean>(() => {
     try {
       return window.localStorage.getItem("rodin-pipeline-map") === "1";
@@ -1457,6 +1463,7 @@ export default function App() {
     flat,
     brush: brushMode,
     eyedropper,
+    background,
     emptyLabel: t("view.empty"),
     onPick: (face: number | null, info: PickInfo) => void handlePick(face, info),
     onBrushHover: brushHover3D,
@@ -1633,6 +1640,22 @@ export default function App() {
               <label className="inline" style={{ marginLeft: 8 }}>
                 <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> {t("view.split")}
               </label>
+              <span className="bg-controls" title={t("view.backgroundHint")}>
+                <span>{t("view.background")}</span>
+                <label className="inline checker-toggle">
+                  <input type="checkbox" checked={background.checker} onChange={(e) => setBackground({ ...background, checker: e.target.checked })} /> {t("view.checker")}
+                </label>
+                <input
+                  type="range"
+                  className="bg-brightness"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(background.brightness * 100)}
+                  onChange={(e) => setBackground({ ...background, brightness: Number(e.target.value) / 100 })}
+                  aria-label={t("view.brightness")}
+                />
+              </span>
               <label className="inline flat-toggle" style={{ marginLeft: 8 }} title={t("view.flatHint")}>
                 <input type="checkbox" checked={flat} onChange={(e) => setFlat(e.target.checked)} /> {t("view.flat")}
               </label>
@@ -1804,6 +1827,7 @@ export default function App() {
                 masks={atlasMasks}
                 brush={{ active: brushMode, radiusPx: atlas ? brushRadius * atlas.scale : 4, hex: brushHex }}
                 eyedropper={eyedropper}
+                background={background}
                 onPick={(face, info) => void handlePick(face, info)}
                 onHover={mapHover}
                 onBrushStart={() => void beginStroke()}

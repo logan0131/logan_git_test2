@@ -4,6 +4,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { RGB } from "@core/types";
 import type { ViewName } from "../engine/types";
 import { srgbToLinear } from "../engine/mesh";
+import { backgroundStyle, DEFAULT_BACKGROUND, type ViewBackground } from "./background";
 
 export interface PickInfo {
   /** Second click on the same face within 400 ms. */
@@ -68,6 +69,7 @@ export interface MeshViewerProps {
   brush?: boolean;
   /** Next click samples a colour instead of picking/painting. */
   eyedropper?: boolean;
+  background?: ViewBackground;
   onBrushHover?: (hit: ViewerHit | null) => void;
   onBrushStart?: (hit: ViewerHit | null) => void;
   onBrushDrag?: (hit: ViewerHit | null) => void;
@@ -274,7 +276,7 @@ function makeCursorLine(): THREE.LineLoop {
 }
 
 export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function MeshViewer(
-  { positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className, flat = false, brush = false, eyedropper = false, onBrushHover, onBrushStart, onBrushDrag, onBrushEnd },
+  { positions, colours, view, fitNonce, overlays, onPick, label, emptyLabel, className, flat = false, brush = false, eyedropper = false, background = DEFAULT_BACKGROUND, onBrushHover, onBrushStart, onBrushDrag, onBrushEnd },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -359,11 +361,12 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+    // Transparent canvas: the host element behind it carries the (checkerboard) background.
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0x2b3138, 1);
+    renderer.setClearColor(0x000000, 0);
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -636,7 +639,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
   return (
     <div className={`mesh-viewer${className ? ` ${className}` : ""}${brush ? " brushing" : ""}`}>
       {label && <div className="mesh-viewer-label">{label}</div>}
-      <div className="mesh-viewer-host" ref={hostRef} />
+      <div className="mesh-viewer-host" ref={hostRef} style={backgroundStyle(background)} />
       {(!positions || positions.length === 0) && (
         <div className="mesh-viewer-empty">{emptyLabel ?? "Load a model to see it here."}</div>
       )}

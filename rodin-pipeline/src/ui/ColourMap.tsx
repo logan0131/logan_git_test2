@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import type { RGB } from "@core/types";
 import { faceAtAtlasPixel, facesInAtlasCircle, paintAtlasImage, paintAtlasOverlay, type AtlasMasks, type FaceAtlas } from "../engine/atlas";
 import type { PickInfo } from "./MeshViewer";
+import { DEFAULT_BACKGROUND, fillBackground, type ViewBackground } from "./background";
 
 export interface ColourMapHandle {
   /** Repaint the pixels of these faces from `colourOf`. */
@@ -23,6 +24,7 @@ export interface ColourMapProps {
   brush: { active: boolean; radiusPx: number; hex: string };
   /** Next click samples a colour instead of picking/painting. */
   eyedropper?: boolean;
+  background?: ViewBackground;
   onPick?: (face: number | null, info: PickInfo) => void;
   onHover?: (face: number | null) => void;
   onBrushStart?: () => void;
@@ -41,7 +43,7 @@ interface ViewTransform {
 }
 
 export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function ColourMap(
-  { atlas, building, colourOf, coloursVersion, masks, brush, eyedropper = false, onPick, onHover, onBrushStart, onBrushPaint, onBrushEnd, label, hint, emptyLabel, buildingLabel },
+  { atlas, building, colourOf, coloursVersion, masks, brush, eyedropper = false, background = DEFAULT_BACKGROUND, onPick, onHover, onBrushStart, onBrushPaint, onBrushEnd, label, hint, emptyLabel, buildingLabel },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -61,6 +63,8 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
   brushRef.current = brush;
   const eyedropperRef = useRef(eyedropper);
   eyedropperRef.current = eyedropper;
+  const backgroundRef = useRef(background);
+  backgroundRef.current = background;
   const atlasRef = useRef(atlas);
   atlasRef.current = atlas;
 
@@ -74,8 +78,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#14181d";
-    ctx.fillRect(0, 0, width, height);
+    fillBackground(ctx, width, height, backgroundRef.current);
     const base = baseRef.current;
     const view = viewRef.current;
     canvas.dataset.view = `${view.scale.toFixed(4)},${view.tx.toFixed(1)},${view.ty.toFixed(1)}`;
@@ -204,7 +207,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
 
   useEffect(() => {
     requestDraw();
-  }, [brush, requestDraw]);
+  }, [brush, background, requestDraw]);
 
   // Canvas sizing.
   useEffect(() => {

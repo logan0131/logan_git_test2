@@ -1,22 +1,26 @@
 # logan_git_test2
 
-## color-mix-lab/
+Rodin(Face Color 3MF) → 색 병합 → 컬러믹스 → PrusaSlicer(Full Spectrum) 3MF 파이프라인.
 
-[Color Mix Lab](https://github.com/michaelhq/color-mix-lab) (MIT) 포크에
-**Rodin → 풀컬러 출력 파이프라인** 작업지시서를 구현한 브라우저 앱입니다.
-
-- 기능 A: Rodin 3D Print(Face Color) 3MF 직접 불러오기
-- 기능 B: 병합 시 그늘색 재판정 + 경계/작은 조각 정리 (Undo, 전후 비교)
-- 기능 C: 노마드 왕복용 정점색 OBJ 내보내기/불러오기 (CIEDE2000 스냅)
-- 기능 D: PrusaSlicer 3MF 내보내기 수정 (VE 번호 연속화, `Slic3r_PE.config` 제거, 검증, 썸네일)
-- §6: 줄무늬 방지 기본값(thirds, 2색)과 실물 직결 추천
-
-```bash
-cd color-mix-lab
-npm ci
-npm run dev    # 개발 서버
-npm test       # vitest
-npm run build  # dist/
+```
+Rodin → rodin-pipeline 앱 (불러오기 → 필라멘트 → 병합 → 컬러믹스 수치 → 미리보기 → 내보내기) → (선택) 노마드 → PrusaSlicer
 ```
 
-자세한 내용은 [color-mix-lab/README.md](color-mix-lab/README.md)를 보세요.
+| 폴더 | 내용 |
+| --- | --- |
+| `rodin-pipeline/` | **우리 앱.** 한 화면에서 모든 수치를 입력하고 미리보기와 3MF 내보내기까지 끝내는 React/Three.js 앱. 계산은 아래 Color Mix Lab 엔진을 그대로 씁니다. |
+| `color-mix-lab/` | [michaelhq/color-mix-lab](https://github.com/michaelhq/color-mix-lab) (MIT) 포크. 작업지시서 기능 A–D(Rodin 3MF 로더, 재판정 병합, 노마드 왕복, 내보내기 수정)를 `src/workflows/vertex/core/`에 구현했고, 원본 UI에도 붙어 있습니다. |
+
+## 실행
+
+```bash
+npm install                 # 저장소 루트에서 한 번 (npm workspaces)
+npm run dev:pipeline        # http://localhost:5173/  ← 우리 앱
+npm run dev:cml             # http://localhost:5173/color-mix-lab/  ← 원본 Color Mix Lab UI (엔진 확인용)
+npm test                    # 엔진 단위 테스트 (vitest, 41개)
+npm run build               # 두 앱 모두 빌드 (각 폴더의 dist/)
+```
+
+## 작업지시서
+
+`color-mix-lab/docs/colormixlab_rodin_work_order.md` — 구현 위치와 검증 내용은 [color-mix-lab/README.md](color-mix-lab/README.md), 앱 사용법은 [rodin-pipeline/README.md](rodin-pipeline/README.md).

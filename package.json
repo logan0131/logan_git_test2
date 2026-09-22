@@ -1,0 +1,14 @@
+{
+  "name": "logan-git-test2",
+  "private": true,
+  "workspaces": [
+    "color-mix-lab",
+    "rodin-pipeline"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspace color-mix-lab",
+    "dev:pipeline": "npm run dev --workspace rodin-pipeline",
+    "dev:cml": "npm run dev --workspace color-mix-lab"
+  }
+}

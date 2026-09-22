@@ -11,12 +11,13 @@ Rodin(Face Color 3MF) → Color Mix Lab (불러오기 → 병합 → 내보내�
 ## 실행
 
 ```bash
-cd color-mix-lab
-npm ci
-npm run dev        # http://localhost:5173/color-mix-lab/
-npm run build      # tsc -b && vite build → dist/
-npm test           # vitest: 41 tests (paint codes, Rodin loader, merge, Nomad, export)
+npm install            # 저장소 루트에서 (npm workspaces: color-mix-lab + rodin-pipeline)
+npm run dev:cml        # http://localhost:5173/color-mix-lab/
+npm run build -w color-mix-lab
+npm test               # vitest: 41 tests (paint codes, Rodin loader, merge, Nomad, export)
 ```
+
+수치 입력부터 내보내기까지 한 화면에서 끝내는 별도 앱은 `../rodin-pipeline/`에 있습니다. 이 폴더의 `core/`가 그 앱의 엔진입니다.
 
 ## 작업지시서 ↔ 구현 위치
 

@@ -21,6 +21,8 @@ export interface FaceAtlas {
   /** Atlas pixels per model unit. */
   scale: number;
   chartCount: number;
+  /** Chart id of each face. */
+  chartOf: Int32Array;
   /** Fraction of atlas pixels covered by faces, and the layout's extent in pixels (diagnostics). */
   filledRatio: number;
   extent: [number, number];
@@ -369,6 +371,7 @@ export function buildFaceAtlas(
     faceUv,
     scale,
     chartCount,
+    chartOf,
     filledRatio: pixelOffsets[n] / (size * size),
     extent: [extentX, extentY],
     marks: new Uint8Array(n),

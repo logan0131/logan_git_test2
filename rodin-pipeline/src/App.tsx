@@ -78,7 +78,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.2";
+const APP_VERSION = "0.4.3";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -492,32 +492,29 @@ export default function App() {
     return { id, faces, hex, index: palette[position]?.index ?? 0, fraction: total > 0 ? area / total : 0 };
   }
 
-  /** Centre the *other* view on a patch: a map pick pans the 3D cameras, a 3D pick frames it on the map. */
-  function focusPatch(patch: PickedPatch, source: PickInfo["source"]): void {
+  /**
+   * Centre the *other* view on the clicked spot: a map pick pans the 3D cameras to the clicked face,
+   * a 3D pick frames the part of the patch that lies in the clicked face's chart on the map (a patch
+   * can be spread over many charts, so framing all of it would just show the whole map).
+   */
+  function focusPatch(patch: PickedPatch, source: PickInfo["source"], clickedFace: number): void {
     const current = modelRef.current;
     if (!current) return;
     const geometry = faceGeometryFor(current);
-    let sx = 0;
-    let sy = 0;
-    let sz = 0;
-    let sw = 0;
-    for (let i = 0; i < patch.faces.length; i++) {
-      const f = patch.faces[i];
-      const a = Math.max(1e-12, areaWeights[f] ?? 0);
-      sx += geometry.centroids[f * 3] * a;
-      sy += geometry.centroids[f * 3 + 1] * a;
-      sz += geometry.centroids[f * 3 + 2] * a;
-      sw += a;
+    if (source !== "3d") {
+      const f = clickedFace >= 0 && clickedFace < geometry.centroids.length / 3 ? clickedFace : patch.faces[0];
+      const point: [number, number, number] = [geometry.centroids[f * 3], geometry.centroids[f * 3 + 1], geometry.centroids[f * 3 + 2]];
+      for (const handle of viewerHandles()) handle.focusOn(point);
     }
-    if (sw > 0 && source !== "3d") for (const handle of viewerHandles()) handle.focusOn([sx / sw, sy / sw, sz / sw]);
     const current2d = atlasRef.current?.atlas;
     if (current2d && mapRef.current && source !== "map") {
+      const chart = current2d.chartOf[clickedFace] ?? -1;
       let x0 = Infinity;
       let y0 = Infinity;
       let x1 = -Infinity;
       let y1 = -Infinity;
-      for (let i = 0; i < patch.faces.length; i++) {
-        const o = patch.faces[i] * 6;
+      const grow = (face: number) => {
+        const o = face * 6;
         for (let k = 0; k < 3; k++) {
           const x = current2d.faceUv[o + k * 2];
           const y = current2d.faceUv[o + k * 2 + 1];
@@ -526,7 +523,9 @@ export default function App() {
           if (y < y0) y0 = y;
           if (y > y1) y1 = y;
         }
-      }
+      };
+      for (let i = 0; i < patch.faces.length; i++) if (current2d.chartOf[patch.faces[i]] === chart) grow(patch.faces[i]);
+      if (!Number.isFinite(x0)) for (let i = 0; i < patch.faces.length; i++) grow(patch.faces[i]);
       if (Number.isFinite(x0)) mapRef.current.focusOn([x0, y0, x1, y1]);
     }
   }
@@ -578,16 +577,16 @@ export default function App() {
         setPickedPatches(next);
         setShownHex(patch.hex);
         setStatus(t("status.colourMode", { index: patch.index, hex: patch.hex, ...selectionSummary(next) }));
-        focusPatch(patch, info.source);
+        focusPatch(patch, info.source, faceIndex);
       } else if (info.toggle || shownHexRef.current !== null) {
         const next = exists ? current.filter((p) => p.id !== patch.id) : [...current, patch];
         setPickedPatches(next);
         setStatus(t(exists ? "status.pickRemoved" : "status.pickAdded", { index: patch.index, hex: patch.hex, ...selectionSummary(next) }));
-        if (!exists) focusPatch(patch, info.source);
+        if (!exists) focusPatch(patch, info.source, faceIndex);
       } else {
         setPickedPatches([patch]);
         setStatus(t("status.picked", { index: patch.index, hex: patch.hex, n: patch.faces.length.toLocaleString(), pct: pct(patch.fraction) }));
-        focusPatch(patch, info.source);
+        focusPatch(patch, info.source, faceIndex);
       }
       setPickTarget("");
     } finally {

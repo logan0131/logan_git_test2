@@ -83,13 +83,20 @@ function requestRender(state: ViewerState): void {
     if (!state.needsRender) return;
     state.needsRender = false;
     state.renderer.render(state.scene, state.camera);
+    // Camera position, readable from outside (debugging / tests).
+    const p = state.camera.position;
+    state.renderer.domElement.dataset.camera = `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
   });
 }
 
 function fitCamera(state: ViewerState, view: ViewName): void {
   const bounds = state.bounds;
   if (!bounds) return;
-  const dir = new THREE.Vector3(...VIEW_DIRECTIONS[view]).normalize();
+  const dir = new THREE.Vector3(...VIEW_DIRECTIONS[view]);
+  // A camera exactly on the orbit pole (straight top/bottom view with Z up) cannot be tilted by
+  // dragging: OrbitControls clamps the polar angle there. Nudge those views 2° towards the front.
+  if (Math.abs(dir.z) > 0.999 * dir.length()) dir.y -= 0.035 * dir.length();
+  dir.normalize();
   const fov = (state.camera.fov * Math.PI) / 180;
   const distance = (bounds.radius / Math.sin(fov / 2)) * 1.12;
   state.camera.position.copy(bounds.center).addScaledVector(dir, distance);

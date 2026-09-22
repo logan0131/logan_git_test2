@@ -73,7 +73,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.3.3";
+const APP_VERSION = "0.3.4";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -188,9 +188,21 @@ export default function App() {
   // ------------------------------------------------------------------
   // Derived data
   // ------------------------------------------------------------------
-  const areaWeights = useMemo(() => (model ? triangleAreaWeights(model) : new Float32Array(0)), [model]);
+  // Geometry-only inputs: keyed on vertices/triangles so recolouring (merge, patch recolour, undo)
+  // neither rebuilds the viewer geometry nor resets its camera.
+  const geometryVertices = model?.vertices ?? null;
+  const geometryTriangles = model?.triangles ?? null;
+  const areaWeights = useMemo(
+    () => (model ? triangleAreaWeights(model) : new Float32Array(0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometryVertices, geometryTriangles],
+  );
   const areaWeightList = useMemo(() => Array.from(areaWeights), [areaWeights]);
-  const positions = useMemo(() => (model ? buildPositions(model) : null), [model]);
+  const positions = useMemo(
+    () => (model ? buildPositions(model) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometryVertices, geometryTriangles],
+  );
 
   const palette = useMemo<PaletteEntry[]>(() => {
     if (!model) return [];

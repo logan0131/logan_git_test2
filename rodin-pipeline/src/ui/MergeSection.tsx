@@ -103,7 +103,7 @@ export function MergeSection({
   const entryByHex = new Map(palette.map((entry) => [rgbToHex(entry.rgb), entry]));
 
   return (
-    <Section step={3} title={t("merge.title")} badge={palette.length > 0 ? t("merge.badge", { n: palette.length, m: plannedMerges }) : t("load.noModel")}>
+    <Section step={3} title={t("merge.title")} help={t("help.merge")} badge={palette.length > 0 ? t("merge.badge", { n: palette.length, m: plannedMerges }) : t("load.noModel")}>
       <p className="muted">{t("merge.intro")}</p>
       <p className="muted">{t("merge.hoverHint")}</p>
       {palette.length > 0 && (

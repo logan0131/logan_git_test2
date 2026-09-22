@@ -44,7 +44,7 @@ export function ExportSection({
   const configAvailable = Boolean(templateInfo?.configFound);
   const configIncluded = settings.includePrinterConfig && configAvailable;
   return (
-    <Section step={5} title={t("exp.title")} badge={check ? (ok ? t("exp.badgeOk") : t("exp.badgeFail", { n: check.failures.length })) : t("load.noModel")}>
+    <Section step={5} title={t("exp.title")} help={t("help.export")} badge={check ? (ok ? t("exp.badgeOk") : t("exp.badgeFail", { n: check.failures.length })) : t("load.noModel")}>
       <Row label={t("exp.fileName")}>
         <input type="text" value={settings.fileName} placeholder={defaultFileName} style={{ width: 230 }} onChange={(e) => set({ fileName: e.target.value })} />
       </Row>

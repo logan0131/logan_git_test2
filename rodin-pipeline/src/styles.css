@@ -195,3 +195,13 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 .cp-system { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .cp-system input[type="color"] { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: transparent; cursor: pointer; }
 .cp-actions { justify-content: flex-end; }
+
+/* Help tips */
+.help-tip { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--muted); background: transparent; color: var(--muted); font-size: 0.74rem; font-weight: 700; line-height: 1; cursor: pointer; margin-left: 6px; padding: 0; flex: 0 0 auto; }
+.help-tip:hover, .help-tip.open { border-color: var(--accent-2); color: var(--accent-2); }
+.help-popover { position: fixed; z-index: 1000; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; box-sizing: border-box; background: #1a2129; border: 1px solid #3a4552; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); padding: 10px 12px; font-size: 0.84rem; line-height: 1.45; font-weight: 400; }
+.help-popover b { display: block; margin-bottom: 4px; }
+.help-popover p { margin: 6px 0 2px; font-weight: 600; color: var(--accent-2); }
+.help-popover .help-li { padding-left: 12px; text-indent: -12px; margin: 2px 0; color: var(--text); }
+.help-popover .help-li::before { content: "· "; color: var(--muted); }
+.pick-colour-mode { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(255, 216, 79, 0.14); color: #ffe38a; font-size: 0.82rem; }

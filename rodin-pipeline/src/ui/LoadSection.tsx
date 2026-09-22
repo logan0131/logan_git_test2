@@ -119,7 +119,7 @@ export function LoadSection({
     ? t("load.bed", { x: templateInfo.bedSize.x.toFixed(0), y: templateInfo.bedSize.y.toFixed(0) })
     : t("load.noBed");
   return (
-    <Section step={1} title={t("load.title")} badge={model ? t("load.faces", { n: model.stats.triangleCount.toLocaleString() }) : t("load.noModel")}>
+    <Section step={1} title={t("load.title")} help={t("help.load")} badge={model ? t("load.faces", { n: model.stats.triangleCount.toLocaleString() }) : t("load.noModel")}>
       <Dropzone accept=".3mf,.obj" title={t("load.dropTitle")} hint={t("load.dropHint")} disabled={busy} onFile={onModelFile} />
       {model && sourceInfo && (
         <div className="note">

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HelpTip } from "./HelpTip";
 import type { RGB } from "@core/types";
 import { rgbToHex } from "@core/colour";
 
@@ -8,18 +9,22 @@ export function Section({
   badge,
   children,
   open = true,
+  help,
 }: {
   step: number;
   title: string;
   badge?: ReactNode;
   children: ReactNode;
   open?: boolean;
+  /** Explanation shown behind a "?" button in the header. */
+  help?: string;
 }) {
   return (
     <details className="section" open={open}>
       <summary>
         <span className="section-step">{step}</span>
         <span className="section-title">{title}</span>
+        {help && <HelpTip text={help} />}
         {badge && <span className="section-badge">{badge}</span>}
       </summary>
       <div className="section-body">{children}</div>

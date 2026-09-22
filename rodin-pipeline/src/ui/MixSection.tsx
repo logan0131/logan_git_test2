@@ -60,7 +60,7 @@ export function MixSection({
   const physicalOnlyMode = settings.assignmentMode === "physical-only";
 
   return (
-    <Section step={4} title={t("mix.title")} badge={plan ? `${t("mix.badge", { p: slots.length, v: virtualCount, t: total })}${total > MAX_PAINTABLE_EXTRUDER_ID ? " ⚠" : ""}` : t("load.noModel")}>
+    <Section step={4} title={t("mix.title")} help={t("help.mix")} badge={plan ? `${t("mix.badge", { p: slots.length, v: virtualCount, t: total })}${total > MAX_PAINTABLE_EXTRUDER_ID ? " ⚠" : ""}` : t("load.noModel")}>
       <Row label={t("mix.assignmentMode")}>
         <select value={settings.assignmentMode} onChange={(e) => set({ assignmentMode: e.target.value as MixSettings["assignmentMode"] })}>
           <option value="physical-and-virtual">{t("mix.physicalAndVirtual")}</option>

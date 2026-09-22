@@ -148,7 +148,7 @@ export function FilamentSection({
   };
 
   return (
-    <Section step={2} title={t("fil.title")} badge={t("fil.badge", { n: settings.count })}>
+    <Section step={2} title={t("fil.title")} help={t("help.filaments")} badge={t("fil.badge", { n: settings.count })}>
       <Row label={t("fil.count")} hint={t("fil.countHint")}>
         <select value={settings.count} onChange={(e) => update({ count: Number(e.target.value) })}>
           {Array.from({ length: MAX_PHYSICAL - MIN_PHYSICAL + 1 }, (_v, i) => MIN_PHYSICAL + i).map((n) => (

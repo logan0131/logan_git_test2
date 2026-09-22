@@ -3,6 +3,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { ViewName } from "../engine/types";
 
+export interface PickInfo {
+  /** Second click on the same face within 400 ms. */
+  double: boolean;
+  /** Shift / Ctrl / Cmd held: add to or remove from the selection. */
+  toggle: boolean;
+}
+
 export interface HighlightOverlay {
   id: string;
   /** Non-indexed face positions (3 corners each). */
@@ -22,7 +29,7 @@ export interface MeshViewerProps {
   fitNonce: number;
   overlays?: HighlightOverlay[];
   /** Called with the clicked face index (or null when nothing was hit). */
-  onPick?: (faceIndex: number | null) => void;
+  onPick?: (faceIndex: number | null, info: PickInfo) => void;
   label?: string;
   emptyLabel?: string;
   className?: string;
@@ -183,6 +190,7 @@ export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPic
     // Click (not drag) picking.
     let down: { x: number; y: number; time: number } | null = null;
     const raycaster = new THREE.Raycaster();
+    let lastClick: { face: number | null; time: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
       down = { x: event.clientX, y: event.clientY, time: performance.now() };
     };
@@ -198,7 +206,11 @@ export function MeshViewer({ positions, colours, view, fitNonce, overlays, onPic
       const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
       const hits = raycaster.intersectObject(state.mesh, false);
-      handler(hits.length > 0 && hits[0].faceIndex !== undefined ? hits[0].faceIndex : null);
+      const face = hits.length > 0 && hits[0].faceIndex !== undefined ? hits[0].faceIndex : null;
+      const now = performance.now();
+      const double = face !== null && lastClick !== null && lastClick.face === face && now - lastClick.time < 400;
+      lastClick = double ? null : { face, time: now };
+      handler(face, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey });
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);

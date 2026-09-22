@@ -353,7 +353,15 @@ const ko = {
   "status.redone": "다시 실행했습니다 (남은 다시 실행 {n}).",
   "pick.extruder": "익스트루더",
   "pick.extruderHint": "이 조각이 출력될 익스트루더. VE는 가상 혼합(구성 비율), E는 실물 필라멘트.",
-  "help.export": "내보내기\n- PrusaSlicer 2.9.6 이상용 3MF. 칠하기 정보와 가상 익스트루더 정의(JSON)가 들어갑니다\n- 좌표/배율/목표 높이: Rodin 좌표를 그대로 두거나 mm로 맞춥니다. '베드에 놓기'와 '중앙 정렬'로 배치\n- 베드 크기는 템플릿에서 가져오거나 직접 입력\n- 템플릿 프린터 설정 포함: 기본 꺼짐. 켜면 템플릿의 Slic3r_PE.config를 그대로 넣습니다\n- 검증 목록이 모두 통과해야 파일이 만들어집니다\n- 노마드 왕복: 색 편집용 OBJ를 내보내고, Nomad Sculpt에서 칠한 OBJ를 다시 읽어 팔레트 색에 맞춥니다",
+  "exp.slicerTitle": "슬라이서 · 프린터 확인",
+  "exp.slicerIntro": "혼합 레시피는 익스트루더 번호만 담깁니다. 아래 E1~E5가 PrusaSlicer의 익스트루더 1~5(필라멘트 프리셋)와 XL 툴 1~5에 장착한 필라멘트와 같은 순서여야 색이 맞습니다. 템플릿 프린터 설정을 포함하면 슬라이서가 템플릿의 필라멘트로 열립니다.",
+  "exp.slicerNoTemplate": "템플릿 3MF가 없어 슬라이서 쪽 필라멘트와 비교할 수 없습니다. PrusaSlicer에서 필라멘트 5개를 지정한 빈 프로젝트를 템플릿으로 넣으면 여기서 순서를 검사합니다.",
+  "exp.slicerMatch": "템플릿({name})의 필라멘트 색과 순서가 일치합니다.",
+  "exp.slicerMismatch": "템플릿의 필라멘트 색과 다릅니다: {list}. 슬롯 순서나 색을 맞추세요.",
+  "exp.slicerCountDiffers": "실물 수가 다릅니다: 앱 {app}, 템플릿 {template}.",
+  "exp.slicerAdopt": "템플릿 색을 슬롯에 적용",
+  "status.templateColoursAdopted": "템플릿의 필라멘트 색 {n}개를 E1부터 순서대로 슬롯에 넣었습니다.",
+  "help.export": "내보내기\n- PrusaSlicer 2.9.6 이상용 3MF. 칠하기 정보와 가상 익스트루더 정의(JSON)가 들어갑니다\n- 좌표/배율/목표 높이: Rodin 좌표를 그대로 두거나 mm로 맞춥니다. '베드에 놓기'와 '중앙 정렬'로 배치\n- 베드 크기는 템플릿에서 가져오거나 직접 입력\n- 템플릿 프린터 설정 포함: 기본 꺼짐. 켜면 템플릿의 Slic3r_PE.config를 그대로 넣습니다\n- 슬라이서·프린터 확인: 레시피는 익스트루더 번호만 담기므로 앱의 E1~E5, PrusaSlicer의 익스트루더 1~5, XL 툴 1~5의 필라멘트 순서가 같아야 합니다. 템플릿이 있으면 색을 비교해 경고합니다\n- 검증 목록이 모두 통과해야 파일이 만들어집니다\n- 노마드 왕복: 색 편집용 OBJ를 내보내고, Nomad Sculpt에서 칠한 OBJ를 다시 읽어 팔레트 색에 맞춥니다",
 };
 
 export type Key = keyof typeof ko;
@@ -700,7 +708,15 @@ const en: Record<Key, string> = {
   "status.redone": "Redone ({n} more to redo).",
   "pick.extruder": "extruder",
   "pick.extruderHint": "The extruder these patches print with. VE = virtual mix (recipe), E = physical filament.",
-  "help.export": "Export\n- A 3MF for PrusaSlicer 2.9.6 or newer with the painting data and the virtual extruder definitions (JSON)\n- Coordinates / scale / target height: keep Rodin coordinates or fit to mm. 'Put on bed' and 'Centre on bed' place the model\n- Bed size comes from the template or is typed in\n- Include template printer config: off by default. On, the template's Slic3r_PE.config is copied in\n- The file is only written when every check in the list passes\n- Nomad round trip: export an OBJ for colour editing and re-import the OBJ painted in Nomad Sculpt, snapped to the palette colours",
+  "exp.slicerTitle": "Slicer · printer check",
+  "exp.slicerIntro": "Mix recipes only carry extruder numbers. E1–E5 below must be the same filaments, in the same order, as PrusaSlicer's extruders 1–5 (filament presets) and the filaments loaded in XL tools 1–5. Including the template printer config opens the slicer with the template's filaments.",
+  "exp.slicerNoTemplate": "No template 3MF, so the slicer's filaments cannot be compared. Load an empty PrusaSlicer project with your five filaments as the template and the order is checked here.",
+  "exp.slicerMatch": "Filament colours and order match the template ({name}).",
+  "exp.slicerMismatch": "Differs from the template's filament colours: {list}. Fix the slot order or colours.",
+  "exp.slicerCountDiffers": "Extruder count differs: app {app}, template {template}.",
+  "exp.slicerAdopt": "Adopt template colours",
+  "status.templateColoursAdopted": "Copied {n} template filament colours into the slots from E1.",
+  "help.export": "Export\n- A 3MF for PrusaSlicer 2.9.6 or newer with the painting data and the virtual extruder definitions (JSON)\n- Coordinates / scale / target height: keep Rodin coordinates or fit to mm. 'Put on bed' and 'Centre on bed' place the model\n- Bed size comes from the template or is typed in\n- Include template printer config: off by default. On, the template's Slic3r_PE.config is copied in\n- Slicer · printer check: recipes carry extruder numbers only, so the app's E1–E5, PrusaSlicer's extruders 1–5 and the XL tools 1–5 must hold the same filaments in the same order. With a template loaded the colours are compared and mismatches flagged\n- The file is only written when every check in the list passes\n- Nomad round trip: export an OBJ for colour editing and re-import the OBJ painted in Nomad Sculpt, snapped to the palette colours",
 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { ko, en };

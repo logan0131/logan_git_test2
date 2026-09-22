@@ -23,6 +23,8 @@ import { deltaE2000, rgbToLab } from "@core/prusaFdmMixer";
 import { downloadBlob, downloadText } from "@core/exportCsv";
 import {
   DEFAULT_SETTINGS,
+  MAX_PHYSICAL,
+  MIN_PHYSICAL,
   type MergeFlag,
   type PipelineSettings,
   type PreviewMode,
@@ -83,7 +85,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.7";
+const APP_VERSION = "0.4.8";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -737,6 +739,19 @@ export default function App() {
     }
     if (template) void dataSet("template", { name: template.info.fileName, buffer: template.buffer });
   }, [settings.rememberTemplate, template]);
+
+  /** Copy the template's filament colours (E1..En) into the app's slots so both sides agree. */
+  function adoptTemplateColours(): void {
+    const colours = template?.info.physicalColours ?? [];
+    if (colours.length === 0) return;
+    setSettings((prev) => {
+      const hex = prev.filaments.hex.slice();
+      const count = Math.max(MIN_PHYSICAL, Math.min(MAX_PHYSICAL, colours.length));
+      for (let i = 0; i < count && i < colours.length; i++) hex[i] = rgbToHex(colours[i]);
+      return { ...prev, filaments: { ...prev.filaments, count, hex }, manualPhysical: {} };
+    });
+    setStatus(t("status.templateColoursAdopted", { n: colours.length }));
+  }
 
   function clearTemplate(): void {
     setTemplate(null);
@@ -1683,6 +1698,8 @@ export default function App() {
             busy={isBusy}
             templateInfo={template?.info ?? null}
             defaultFileName={defaultFileName}
+            filaments={settings.filaments}
+            onAdoptTemplateColours={adoptTemplateColours}
             nomad={{
               canExport: Boolean(model) && palette.length > 0,
               colourCount: palette.length,

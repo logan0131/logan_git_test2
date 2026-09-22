@@ -1,8 +1,11 @@
 import { MAX_PAINTABLE_EXTRUDER_ID } from "@core/paintCodes";
 import type { Template3mfInfo } from "@core/template3mf";
-import type { ExportSettings } from "../engine/types";
+import { rgbToHex } from "@core/colour";
+import { deltaE2000, rgbToLab } from "@core/prusaFdmMixer";
+import type { ExportSettings, FilamentSettings } from "../engine/types";
+import { hexToRgb } from "../engine/mesh";
 import { useT } from "../i18n";
-import { NumberField, Row, Section } from "./common";
+import { NumberField, Row, Section, Swatch } from "./common";
 
 export interface ExportCheck {
   physicalCount: number;
@@ -28,6 +31,8 @@ export function ExportSection({
   templateInfo,
   defaultFileName,
   nomad,
+  filaments,
+  onAdoptTemplateColours,
 }: {
   settings: ExportSettings;
   onChange: (next: ExportSettings) => void;
@@ -37,12 +42,26 @@ export function ExportSection({
   templateInfo: Template3mfInfo | null;
   defaultFileName: string;
   nomad: NomadPanelState;
+  filaments: FilamentSettings;
+  onAdoptTemplateColours: () => void;
 }) {
   const t = useT();
   const set = (patch: Partial<ExportSettings>) => onChange({ ...settings, ...patch });
   const ok = check !== null && check.failures.length === 0;
   const configAvailable = Boolean(templateInfo?.configFound);
   const configIncluded = settings.includePrinterConfig && configAvailable;
+  // Slot colours vs the template's filament colours: the recipes only carry extruder numbers,
+  // so E1..En must mean the same filament in the app, in PrusaSlicer and on the printer.
+  const templateColours = templateInfo?.physicalColours ?? [];
+  const slotRows = Array.from({ length: filaments.count }, (_v, i) => {
+    const hex = (filaments.hex[i] ?? "#808080").toUpperCase();
+    const templateRgb = templateColours[i];
+    const templateHex = templateRgb ? rgbToHex(templateRgb) : null;
+    const distance = templateRgb ? deltaE2000(rgbToLab(hexToRgb(hex)), rgbToLab(templateRgb)) : 0;
+    return { slot: i + 1, hex, name: filaments.names[i] ?? "", templateHex, mismatch: templateHex !== null && distance > 8 };
+  });
+  const mismatches = slotRows.filter((row) => row.mismatch);
+  const templateCountDiffers = templateColours.length > 0 && templateColours.length !== filaments.count;
   return (
     <Section step={5} title={t("exp.title")} help={t("help.export")} badge={check ? (ok ? t("exp.badgeOk") : t("exp.badgeFail", { n: check.failures.length })) : t("load.noModel")}>
       <Row label={t("exp.fileName")}>
@@ -109,6 +128,41 @@ export function ExportSection({
           )}
         </div>
       )}
+      <div className={`note slicer-check${mismatches.length > 0 || templateCountDiffers ? " warn-box" : ""}`}>
+        <b>{t("exp.slicerTitle")}</b>
+        <div className="muted">{t("exp.slicerIntro")}</div>
+        <div className="slot-list">
+          {slotRows.map((row) => (
+            <span key={row.slot} className={`slot-chip${row.mismatch ? " mismatch" : ""}`}>
+              <b>E{row.slot}</b>
+              <Swatch hex={row.hex} size={14} />
+              <code>{row.hex}</code>
+              {row.name && row.name !== `E${row.slot}` && <span className="muted">{row.name}</span>}
+              {row.mismatch && row.templateHex && (
+                <span className="muted">
+                  ≠ <Swatch hex={row.templateHex} size={12} /> {row.templateHex}
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+        {templateColours.length === 0 ? (
+          <div className="muted">{t("exp.slicerNoTemplate")}</div>
+        ) : mismatches.length === 0 && !templateCountDiffers ? (
+          <div className="ok">{t("exp.slicerMatch", { name: templateInfo?.fileName ?? "" })}</div>
+        ) : (
+          <div className="inline">
+            <span className="warn">
+              {templateCountDiffers
+                ? t("exp.slicerCountDiffers", { app: filaments.count, template: templateColours.length })
+                : t("exp.slicerMismatch", { list: mismatches.map((row) => `E${row.slot}`).join(", ") })}
+            </span>
+            <button type="button" className="btn small adopt-template" disabled={busy} onClick={onAdoptTemplateColours}>
+              {t("exp.slicerAdopt")}
+            </button>
+          </div>
+        )}
+      </div>
       <div className="inline">
         <button type="button" className="btn primary" disabled={busy || !ok} onClick={onExport}>
           {t("exp.button")}

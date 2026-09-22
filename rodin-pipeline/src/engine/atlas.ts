@@ -25,146 +25,257 @@ export interface FaceAtlas {
   marks: Uint8Array;
 }
 
-function dominantBin(nx: number, ny: number, nz: number): number {
-  const ax = Math.abs(nx);
-  const ay = Math.abs(ny);
-  const az = Math.abs(nz);
-  if (ax >= ay && ax >= az) return nx >= 0 ? 0 : 1;
-  if (ay >= az) return ny >= 0 ? 2 : 3;
-  return nz >= 0 ? 4 : 5;
-}
-
-/** Projection of a vertex onto the chart plane of a bin: returns [u, v]. */
-function project(bin: number, x: number, y: number, z: number): [number, number] {
-  switch (bin) {
-    case 0:
-      return [y, z];
-    case 1:
-      return [-y, z];
-    case 2:
-      return [-x, z];
-    case 3:
-      return [x, z];
-    case 4:
-      return [x, y];
-    default:
-      return [-x, y];
+/** Per-chart projection basis: charts are projected onto the plane facing their average normal, kept upright. */
+function chartBasis(d: [number, number, number]): { right: [number, number, number]; up: [number, number, number] } {
+  let up0: [number, number, number] = Math.abs(d[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1];
+  // right = up0 × d, up = d × right
+  let rx = up0[1] * d[2] - up0[2] * d[1];
+  let ry = up0[2] * d[0] - up0[0] * d[2];
+  let rz = up0[0] * d[1] - up0[1] * d[0];
+  let len = Math.hypot(rx, ry, rz);
+  if (len < 1e-9) {
+    up0 = [1, 0, 0];
+    rx = up0[1] * d[2] - up0[2] * d[1];
+    ry = up0[2] * d[0] - up0[0] * d[2];
+    rz = up0[0] * d[1] - up0[1] * d[0];
+    len = Math.hypot(rx, ry, rz) || 1;
   }
+  rx /= len;
+  ry /= len;
+  rz /= len;
+  const ux = d[1] * rz - d[2] * ry;
+  const uy = d[2] * rx - d[0] * rz;
+  const uz = d[0] * ry - d[1] * rx;
+  const ulen = Math.hypot(ux, uy, uz) || 1;
+  return { right: [rx, ry, rz], up: [ux / ulen, uy / ulen, uz / ulen] };
 }
 
-export function buildFaceAtlas(model: MeshModel, adjacency: FaceAdjacency, geometry: FaceGeometry, size: number): FaceAtlas {
+/** Maximum angle between a face normal and its chart's seed normal. */
+const CHART_CONE_DEGREES = 70;
+/** Charts with fewer faces are absorbed by their best-connected neighbour chart. */
+const MIN_CHART_FACES = 24;
+
+export function buildFaceAtlas(
+  model: MeshModel,
+  adjacency: FaceAdjacency,
+  geometry: FaceGeometry,
+  areas: ArrayLike<number>,
+  size: number,
+): FaceAtlas {
   const n = model.triangles.length;
-  const { normals } = geometry;
+  const { normals, centroids } = geometry;
   const { offsets, neighbours } = adjacency;
 
-  // 1. Dominant-axis bins, smoothed once by neighbour majority to avoid confetti charts.
-  const rawBins = new Uint8Array(n);
-  for (let i = 0; i < n; i++) rawBins[i] = dominantBin(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
-  const bins = new Uint8Array(n);
-  const votes = new Int32Array(6);
+  // 1. Smoothed normals (face + neighbours) so noisy faces do not break charts apart.
+  const smooth = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    votes.fill(0);
-    votes[rawBins[i]] += 2;
-    for (let k = offsets[i]; k < offsets[i + 1]; k++) votes[rawBins[neighbours[k]]] += 1;
-    let best = rawBins[i];
-    for (let b = 0; b < 6; b++) if (votes[b] > votes[best]) best = b;
-    bins[i] = best;
+    let x = normals[i * 3] * 2;
+    let y = normals[i * 3 + 1] * 2;
+    let z = normals[i * 3 + 2] * 2;
+    for (let k = offsets[i]; k < offsets[i + 1]; k++) {
+      const g = neighbours[k];
+      x += normals[g * 3];
+      y += normals[g * 3 + 1];
+      z += normals[g * 3 + 2];
+    }
+    const len = Math.hypot(x, y, z);
+    if (len > 0) {
+      x /= len;
+      y /= len;
+      z /= len;
+    } else {
+      x = normals[i * 3];
+      y = normals[i * 3 + 1];
+      z = normals[i * 3 + 2];
+    }
+    smooth[i * 3] = x;
+    smooth[i * 3 + 1] = y;
+    smooth[i * 3 + 2] = z;
   }
 
-  // 2. Charts = connected faces with the same bin.
+  // 2. Region growing: seeds in order of face area, faces join while their normal stays within the cone.
+  const cosLimit = Math.cos((CHART_CONE_DEGREES * Math.PI) / 180);
+  const seeds = Array.from({ length: n }, (_v, i) => i).sort((a, b) => areas[b] - areas[a]);
   const chartOf = new Int32Array(n).fill(-1);
-  const order = new Int32Array(n); // faces grouped by chart
-  const chartStart: number[] = [];
   const stack = new Int32Array(n);
-  let cursor = 0;
   let chartCount = 0;
-  for (let seed = 0; seed < n; seed++) {
+  for (const seed of seeds) {
     if (chartOf[seed] !== -1) continue;
     const chart = chartCount++;
-    chartStart.push(cursor);
+    const dx = smooth[seed * 3];
+    const dy = smooth[seed * 3 + 1];
+    const dz = smooth[seed * 3 + 2];
     let top = 0;
     stack[top++] = seed;
     chartOf[seed] = chart;
-    const bin = bins[seed];
     while (top > 0) {
       const f = stack[--top];
-      order[cursor++] = f;
       for (let k = offsets[f]; k < offsets[f + 1]; k++) {
         const g = neighbours[k];
-        if (chartOf[g] === -1 && bins[g] === bin) {
-          chartOf[g] = chart;
-          stack[top++] = g;
-        }
+        if (chartOf[g] !== -1) continue;
+        if (smooth[g * 3] * dx + smooth[g * 3 + 1] * dy + smooth[g * 3 + 2] * dz < cosLimit) continue;
+        chartOf[g] = chart;
+        stack[top++] = g;
       }
     }
   }
-  chartStart.push(cursor);
 
-  // 3. Chart bounds in projected model units.
+  // 3. Absorb tiny charts into the neighbouring chart they touch most (prefer a large one).
+  for (let pass = 0; pass < 3; pass++) {
+    const sizes = new Int32Array(chartCount);
+    for (let i = 0; i < n; i++) sizes[chartOf[i]]++;
+    const contacts: Array<Map<number, number> | null> = new Array(chartCount).fill(null);
+    for (let i = 0; i < n; i++) {
+      const c = chartOf[i];
+      if (sizes[c] >= MIN_CHART_FACES) continue;
+      let map = contacts[c];
+      if (!map) {
+        map = new Map();
+        contacts[c] = map;
+      }
+      for (let k = offsets[i]; k < offsets[i + 1]; k++) {
+        const other = chartOf[neighbours[k]];
+        if (other !== c) map.set(other, (map.get(other) ?? 0) + 1);
+      }
+    }
+    const remap = new Int32Array(chartCount);
+    let changed = 0;
+    for (let c = 0; c < chartCount; c++) {
+      remap[c] = c;
+      const map = contacts[c];
+      if (!map) continue;
+      let best = -1;
+      let bestScore = -1;
+      for (const [other, count] of map) {
+        const score = count + (sizes[other] >= MIN_CHART_FACES ? 1e9 : sizes[other]);
+        if (score > bestScore) {
+          best = other;
+          bestScore = score;
+        }
+      }
+      if (best >= 0) {
+        remap[c] = best;
+        changed++;
+      }
+    }
+    if (changed === 0) break;
+    // Resolve chains (a small chart absorbed into another small chart that was itself absorbed).
+    for (let c = 0; c < chartCount; c++) {
+      let target = remap[c];
+      for (let hop = 0; hop < 8 && remap[target] !== target; hop++) target = remap[target];
+      remap[c] = target;
+    }
+    for (let i = 0; i < n; i++) chartOf[i] = remap[chartOf[i]];
+  }
+  // Compact chart ids.
+  {
+    const used = new Int32Array(chartCount).fill(-1);
+    let next = 0;
+    for (let i = 0; i < n; i++) {
+      const c = chartOf[i];
+      if (used[c] === -1) used[c] = next++;
+      chartOf[i] = used[c];
+    }
+    chartCount = next;
+  }
+
+  // 4. Chart direction (area-weighted normal), basis and bounds; chart centre z for the layout order.
+  const dirX = new Float64Array(chartCount);
+  const dirY = new Float64Array(chartCount);
+  const dirZ = new Float64Array(chartCount);
+  const centreZ = new Float64Array(chartCount);
+  const weight = new Float64Array(chartCount);
+  for (let i = 0; i < n; i++) {
+    const c = chartOf[i];
+    const a = Math.max(1e-12, areas[i]);
+    dirX[c] += normals[i * 3] * a;
+    dirY[c] += normals[i * 3 + 1] * a;
+    dirZ[c] += normals[i * 3 + 2] * a;
+    centreZ[c] += centroids[i * 3 + 2] * a;
+    weight[c] += a;
+  }
+  const bases: Array<{ right: [number, number, number]; up: [number, number, number] }> = new Array(chartCount);
+  for (let c = 0; c < chartCount; c++) {
+    const len = Math.hypot(dirX[c], dirY[c], dirZ[c]);
+    const d: [number, number, number] = len > 0 ? [dirX[c] / len, dirY[c] / len, dirZ[c] / len] : [0, 0, 1];
+    bases[c] = chartBasis(d);
+    centreZ[c] /= weight[c] || 1;
+  }
   const minU = new Float64Array(chartCount).fill(Infinity);
   const minV = new Float64Array(chartCount).fill(Infinity);
   const maxU = new Float64Array(chartCount).fill(-Infinity);
   const maxV = new Float64Array(chartCount).fill(-Infinity);
   const uv = new Float32Array(n * 6);
-  for (let c = 0; c < chartCount; c++) {
-    for (let k = chartStart[c]; k < chartStart[c + 1]; k++) {
-      const f = order[k];
-      const tri = model.triangles[f];
-      const bin = bins[f];
-      for (let corner = 0; corner < 3; corner++) {
-        const v = model.vertices[tri[corner]];
-        const [u, w] = project(bin, v[0], v[1], v[2]);
-        uv[f * 6 + corner * 2] = u;
-        uv[f * 6 + corner * 2 + 1] = w;
-        if (u < minU[c]) minU[c] = u;
-        if (u > maxU[c]) maxU[c] = u;
-        if (w < minV[c]) minV[c] = w;
-        if (w > maxV[c]) maxV[c] = w;
-      }
+  for (let f = 0; f < n; f++) {
+    const c = chartOf[f];
+    const { right, up } = bases[c];
+    const tri = model.triangles[f];
+    for (let corner = 0; corner < 3; corner++) {
+      const v = model.vertices[tri[corner]];
+      const u = v[0] * right[0] + v[1] * right[1] + v[2] * right[2];
+      const w = v[0] * up[0] + v[1] * up[1] + v[2] * up[2];
+      uv[f * 6 + corner * 2] = u;
+      uv[f * 6 + corner * 2 + 1] = w;
+      if (u < minU[c]) minU[c] = u;
+      if (u > maxU[c]) maxU[c] = u;
+      if (w < minV[c]) minV[c] = w;
+      if (w > maxV[c]) maxV[c] = w;
     }
   }
 
-  // 4. Scale + shelf packing (retry with a smaller scale until everything fits).
+  // 5. Scale + shelf packing. Charts are laid out top-to-bottom following the model (bands by
+  //    chart height in the model); inside a band, taller charts first. Retry smaller until it fits.
   const pad = 1;
   let area = 0;
   for (let c = 0; c < chartCount; c++) area += Math.max(1e-9, (maxU[c] - minU[c]) * (maxV[c] - minV[c]));
-  let scale = Math.sqrt((0.6 * size * size) / Math.max(area, 1e-9));
-  const sorted = Array.from({ length: chartCount }, (_v, c) => c);
+  let scale = Math.sqrt((0.55 * size * size) / Math.max(area, 1e-9));
+  const byZ = Array.from({ length: chartCount }, (_v, c) => c).sort((a, b) => centreZ[b] - centreZ[a]);
+  const bandCount = Math.max(1, Math.min(12, Math.round(Math.sqrt(chartCount / 8))));
+  const bandSize = Math.ceil(chartCount / bandCount);
   const chartX = new Float64Array(chartCount);
   const chartY = new Float64Array(chartCount);
+  const widths = new Float64Array(chartCount);
+  const heights = new Float64Array(chartCount);
   let fits = false;
-  for (let attempt = 0; attempt < 14 && !fits; attempt++) {
-    const heights = new Float64Array(chartCount);
-    const widths = new Float64Array(chartCount);
+  for (let attempt = 0; attempt < 16 && !fits; attempt++) {
     for (let c = 0; c < chartCount; c++) {
       widths[c] = Math.ceil((maxU[c] - minU[c]) * scale) + 2 * pad + 1;
       heights[c] = Math.ceil((maxV[c] - minV[c]) * scale) + 2 * pad + 1;
     }
-    sorted.sort((a, b) => heights[b] - heights[a] || widths[b] - widths[a]);
     let x = 0;
     let y = 0;
     let shelf = 0;
     fits = true;
-    for (const c of sorted) {
-      const w = widths[c];
-      const h = heights[c];
-      if (w > size) {
-        fits = false;
-        break;
-      }
-      if (x + w > size) {
+    for (let b = 0; b < bandCount && fits; b++) {
+      const band = byZ.slice(b * bandSize, (b + 1) * bandSize).sort((p, q) => heights[q] - heights[p] || widths[q] - widths[p]);
+      if (band.length === 0) continue;
+      // A band always starts a new shelf so the vertical order follows the model.
+      if (x > 0) {
         y += shelf;
         x = 0;
         shelf = 0;
       }
-      if (y + h > size) {
-        fits = false;
-        break;
+      for (const c of band) {
+        const w = widths[c];
+        const h = heights[c];
+        if (w > size) {
+          fits = false;
+          break;
+        }
+        if (x + w > size) {
+          y += shelf;
+          x = 0;
+          shelf = 0;
+        }
+        if (y + h > size) {
+          fits = false;
+          break;
+        }
+        chartX[c] = x;
+        chartY[c] = y;
+        x += w;
+        if (h > shelf) shelf = h;
       }
-      chartX[c] = x;
-      chartY[c] = y;
-      x += w;
-      if (h > shelf) shelf = h;
     }
     if (!fits) scale *= 0.85;
   }

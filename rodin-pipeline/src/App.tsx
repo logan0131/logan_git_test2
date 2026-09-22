@@ -78,7 +78,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.4.1";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -489,6 +489,45 @@ export default function App() {
     return { id, faces, hex, index: palette[position]?.index ?? 0, fraction: total > 0 ? area / total : 0 };
   }
 
+  /** Centre the *other* view on a patch: a map pick pans the 3D cameras, a 3D pick frames it on the map. */
+  function focusPatch(patch: PickedPatch, source: PickInfo["source"]): void {
+    const current = modelRef.current;
+    if (!current) return;
+    const geometry = faceGeometryFor(current);
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    let sw = 0;
+    for (let i = 0; i < patch.faces.length; i++) {
+      const f = patch.faces[i];
+      const a = Math.max(1e-12, areaWeights[f] ?? 0);
+      sx += geometry.centroids[f * 3] * a;
+      sy += geometry.centroids[f * 3 + 1] * a;
+      sz += geometry.centroids[f * 3 + 2] * a;
+      sw += a;
+    }
+    if (sw > 0 && source !== "3d") for (const handle of viewerHandles()) handle.focusOn([sx / sw, sy / sw, sz / sw]);
+    const current2d = atlasRef.current?.atlas;
+    if (current2d && mapRef.current && source !== "map") {
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let i = 0; i < patch.faces.length; i++) {
+        const o = patch.faces[i] * 6;
+        for (let k = 0; k < 3; k++) {
+          const x = current2d.faceUv[o + k * 2];
+          const y = current2d.faceUv[o + k * 2 + 1];
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+      if (Number.isFinite(x0)) mapRef.current.focusOn([x0, y0, x1, y1]);
+    }
+  }
+
   function selectionSummary(patches: PickedPatch[]): { n: number; faces: string; pct: string } {
     const faces = patches.reduce((sum, patch) => sum + patch.faces.length, 0);
     const fraction = patches.reduce((sum, patch) => sum + patch.fraction, 0);
@@ -514,13 +553,16 @@ export default function App() {
         setPickedPatches(next);
         setShownHex(patch.hex);
         setStatus(t("status.colourMode", { index: patch.index, hex: patch.hex, ...selectionSummary(next) }));
+        focusPatch(patch, info.source);
       } else if (info.toggle || shownHexRef.current !== null) {
         const next = exists ? current.filter((p) => p.id !== patch.id) : [...current, patch];
         setPickedPatches(next);
         setStatus(t(exists ? "status.pickRemoved" : "status.pickAdded", { index: patch.index, hex: patch.hex, ...selectionSummary(next) }));
+        if (!exists) focusPatch(patch, info.source);
       } else {
         setPickedPatches([patch]);
         setStatus(t("status.picked", { index: patch.index, hex: patch.hex, n: patch.faces.length.toLocaleString(), pct: pct(patch.fraction) }));
+        focusPatch(patch, info.source);
       }
       setPickTarget("");
     } finally {
@@ -970,7 +1012,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       try {
         const size = model.triangles.length > 300_000 ? 3072 : 2048;
-        const built = buildFaceAtlas(model, adjacencyFor(model), faceGeometryFor(model), size);
+        const built = buildFaceAtlas(model, adjacencyFor(model), faceGeometryFor(model), areaWeights, size);
         atlasRef.current = { triangles: model.triangles, atlas: built };
         if (!cancelled) {
           setAtlas(built);

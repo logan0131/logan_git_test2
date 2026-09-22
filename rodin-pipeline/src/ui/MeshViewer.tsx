@@ -10,6 +10,8 @@ export interface PickInfo {
   double: boolean;
   /** Shift / Ctrl / Cmd held: add to or remove from the selection. */
   toggle: boolean;
+  /** Which view the click came from (the other view re-centres on the patch). */
+  source?: "3d" | "map";
 }
 
 export interface HighlightOverlay {
@@ -42,6 +44,8 @@ export interface MeshViewerHandle {
   setBrushCursor(cursor: BrushCursor | null): void;
   /** Unit vector the camera looks along. */
   viewDirection(): [number, number, number];
+  /** Pan so that `point` sits at the screen centre (orientation and distance unchanged). */
+  focusOn(point: [number, number, number]): void;
 }
 
 export interface MeshViewerProps {
@@ -331,6 +335,16 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
         state.camera.getWorldDirection(dir);
         return [dir.x, dir.y, dir.z];
       },
+      focusOn(point) {
+        const state = stateRef.current;
+        if (!state) return;
+        const target = new THREE.Vector3(point[0], point[1], point[2]);
+        const delta = target.clone().sub(state.controls.target);
+        state.camera.position.add(delta);
+        state.controls.target.copy(target);
+        state.controls.update();
+        requestRender(state);
+      },
     }),
     [],
   );
@@ -436,7 +450,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, MeshViewerProps>(function
       const now = performance.now();
       const double = face !== null && lastClick !== null && lastClick.face === face && now - lastClick.time < 400;
       lastClick = double ? null : { face, time: now };
-      handler(face, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey });
+      handler(face, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey, source: "3d" });
     };
     const onPointerLeave = () => {
       pendingMove = null;

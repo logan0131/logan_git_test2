@@ -8,6 +8,8 @@ export interface ColourMapHandle {
   repaintFaces(faces: ArrayLike<number>): void;
   /** Brush circle mirrored from the 3D view (atlas pixels), or null to hide. */
   setRemoteCursor(position: [number, number] | null): void;
+  /** Centre the view on an atlas-pixel box [x0, y0, x1, y1], zooming only when it is too small or too large to see. */
+  focusOn(box: [number, number, number, number]): void;
 }
 
 export interface ColourMapProps {
@@ -70,6 +72,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
     ctx.fillRect(0, 0, width, height);
     const base = baseRef.current;
     const view = viewRef.current;
+    canvas.dataset.view = `${view.scale.toFixed(4)},${view.tx.toFixed(1)},${view.ty.toFixed(1)}`;
     if (base) {
       ctx.imageSmoothingEnabled = view.scale < 1;
       ctx.save();
@@ -130,6 +133,29 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
       },
       setRemoteCursor(position) {
         remoteCursorRef.current = position;
+        requestDraw();
+      },
+      focusOn(box) {
+        const canvas = canvasRef.current;
+        const current = atlasRef.current;
+        if (!canvas || !current) return;
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.width / dpr;
+        const height = canvas.height / dpr;
+        const bw = Math.max(4, box[2] - box[0]);
+        const bh = Math.max(4, box[3] - box[1]);
+        const fit = Math.max(1e-3, (Math.min(width, height) - 12) / current.size);
+        const view = viewRef.current;
+        const shownW = bw * view.scale;
+        const shownH = bh * view.scale;
+        let scale = view.scale;
+        if (shownW > width * 0.6 || shownH > height * 0.6 || Math.max(shownW, shownH) < Math.min(width, height) * 0.06) {
+          scale = Math.min((width * 0.45) / bw, (height * 0.45) / bh);
+          scale = Math.max(fit, Math.min(scale, Math.max(fit * 12, 8)));
+        }
+        const cx = (box[0] + box[2]) / 2;
+        const cy = (box[1] + box[3]) / 2;
+        viewRef.current = { scale, tx: width / 2 - cx * scale, ty: height / 2 - cy * scale };
         requestDraw();
       },
     }),
@@ -267,7 +293,7 @@ export const ColourMap = forwardRef<ColourMapHandle, ColourMapProps>(function Co
       const now = performance.now();
       const double = face >= 0 && lastClick !== null && lastClick.face === face && now - lastClick.time < 400;
       lastClick = double || face < 0 ? null : { face, time: now };
-      callbacksRef.current.onPick?.(face >= 0 ? face : null, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey });
+      callbacksRef.current.onPick?.(face >= 0 ? face : null, { double, toggle: event.shiftKey || event.ctrlKey || event.metaKey, source: "map" });
     };
     const onPointerLeave = () => {
       cursorRef.current = null;

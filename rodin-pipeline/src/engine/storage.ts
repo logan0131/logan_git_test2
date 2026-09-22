@@ -68,7 +68,7 @@ export function downloadTextFile(fileName: string, text: string, mime = "applica
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,9 @@ export function ExportSection({
   nomad,
   filaments,
   onAdoptTemplateColours,
+  lastExport,
+  onDownloadAgain,
+  outcome,
 }: {
   settings: ExportSettings;
   onChange: (next: ExportSettings) => void;
@@ -44,6 +47,11 @@ export function ExportSection({
   nomad: NomadPanelState;
   filaments: FilamentSettings;
   onAdoptTemplateColours: () => void;
+  /** The file built by the last export, kept so it can be downloaded again by a plain click. */
+  lastExport: { fileName: string; size: number; at: number } | null;
+  onDownloadAgain: () => void;
+  /** Result of the last export click, shown right under the button so a failure is not missed. */
+  outcome: { kind: "ok" | "error"; message: string; at: number } | null;
 }) {
   const t = useT();
   const set = (patch: Partial<ExportSettings>) => onChange({ ...settings, ...patch });
@@ -167,7 +175,19 @@ export function ExportSection({
         <button type="button" className="btn primary" disabled={busy || !ok} onClick={onExport}>
           {t("exp.button")}
         </button>
+        {lastExport && (
+          <button type="button" className="btn small download-again" onClick={onDownloadAgain} title={t("exp.downloadAgainHint")}>
+            {t("exp.downloadAgain", { file: lastExport.fileName, size: `${(lastExport.size / (1024 * 1024)).toFixed(1)} MB` })}
+          </button>
+        )}
       </div>
+      {outcome && (
+        <div className={`export-outcome ${outcome.kind}`} role={outcome.kind === "error" ? "alert" : "status"}>
+          <b>{outcome.kind === "ok" ? t("exp.outcomeOkTitle") : t("exp.outcomeErrorTitle")}</b>
+          <pre>{outcome.message}</pre>
+        </div>
+      )}
+      <div className="muted">{t("exp.downloadHint")}</div>
 
       <details>
         <summary className="muted">{t("exp.nomadTitle")}</summary>

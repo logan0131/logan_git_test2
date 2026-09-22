@@ -243,6 +243,10 @@ table.grid td .colour-select-trigger { min-width: 150px; }
 
 .slicer-check { display: grid; gap: 6px; }
 .slicer-check.warn-box { border: 1px solid rgba(245, 198, 109, 0.5); }
+.export-outcome { display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px; font-size: 0.84rem; }
+.export-outcome.ok { border: 1px solid rgba(110, 220, 150, 0.45); background: rgba(110, 220, 150, 0.08); }
+.export-outcome.error { border: 1px solid rgba(255, 110, 110, 0.6); background: rgba(255, 110, 110, 0.1); }
+.export-outcome pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; user-select: text; }
 .slot-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .slot-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); font-size: 0.84rem; }
 .slot-chip.mismatch { background: rgba(245, 198, 109, 0.16); }

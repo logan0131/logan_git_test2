@@ -85,7 +85,7 @@ import { ColourSelect } from "./ui/ColourSelect";
 import { ColourPicker } from "./ui/ColourPicker";
 import { LangContext, loadStoredLang, storeLang, translate, type Lang, type Params, type Key } from "./i18n";
 
-const APP_VERSION = "0.4.9";
+const APP_VERSION = "0.4.10";
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "") || "model";
@@ -132,6 +132,8 @@ export default function App() {
   const [history, setHistory] = useState<RGB[][]>([]);
   const [future, setFuture] = useState<RGB[][]>([]);
   const [template, setTemplate] = useState<{ info: Template3mfInfo; buffer: ArrayBuffer } | null>(null);
+  const [lastExport, setLastExport] = useState<{ fileName: string; blob: Blob; at: number } | null>(null);
+  const [exportOutcome, setExportOutcome] = useState<{ kind: "ok" | "error"; message: string; at: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState(() => translate(loadStoredLang(), "status.ready"));
   const [mergeReport, setMergeReport] = useState<MergeReportData | null>(null);
@@ -1422,6 +1424,7 @@ export default function App() {
   // ------------------------------------------------------------------
   async function export3mf(): Promise<void> {
     if (!model || !plan || palette.length === 0) return;
+    setExportOutcome(null);
     setBusy(t("busy.exporting"));
     await yieldToUi();
     try {
@@ -1451,7 +1454,13 @@ export default function App() {
         includePrinterConfig: e.includePrinterConfig,
         effectiveRgbByPaletteIndex: effectiveByIndex,
       });
+      setLastExport({ fileName: result.fileName, blob: result.blob, at: Date.now() });
       downloadBlob(result.fileName, result.blob);
+      setExportOutcome({
+        kind: "ok",
+        message: t("exp.outcomeOk", { file: result.fileName, size: `${(result.blob.size / (1024 * 1024)).toFixed(1)} MB` }),
+        at: Date.now(),
+      });
       const renumbered =
         result.summary.renumberedVirtuals.length > 0
           ? t("status.renumbered", { list: result.summary.renumberedVirtuals.map((r) => `VE${r.from}→VE${r.to}`).join(" ") })
@@ -1467,7 +1476,10 @@ export default function App() {
         }),
       );
     } catch (err) {
-      setStatus(t("status.exportFailed", { message: err instanceof Error ? err.message : String(err) }));
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("3MF export failed", err);
+      setExportOutcome({ kind: "error", message, at: Date.now() });
+      setStatus(t("status.exportFailed", { message }));
     } finally {
       setBusy(null);
     }
@@ -1723,6 +1735,11 @@ export default function App() {
             defaultFileName={defaultFileName}
             filaments={settings.filaments}
             onAdoptTemplateColours={adoptTemplateColours}
+            lastExport={lastExport ? { fileName: lastExport.fileName, size: lastExport.blob.size, at: lastExport.at } : null}
+            outcome={exportOutcome}
+            onDownloadAgain={() => {
+              if (lastExport) downloadBlob(lastExport.fileName, lastExport.blob);
+            }}
             nomad={{
               canExport: Boolean(model) && palette.length > 0,
               colourCount: palette.length,

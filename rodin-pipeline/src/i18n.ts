@@ -361,6 +361,12 @@ const ko = {
   "exp.slicerCountDiffers": "실물 수가 다릅니다: 앱 {app}, 템플릿 {template}.",
   "exp.slicerAdopt": "템플릿 필라멘트를 슬롯에 적용",
   "status.templateFilamentsApplied": "템플릿의 필라멘트 {n}개(색·이름)를 E1부터 순서대로 슬롯과 목록에 넣었습니다.",
+  "exp.downloadAgain": "다시 받기: {file} ({size})",
+  "exp.downloadAgainHint": "마지막으로 만든 3MF를 브라우저 다운로드로 다시 보냅니다. 자동 다운로드가 막혔을 때 누르세요.",
+  "exp.outcomeOkTitle": "3MF를 만들어 브라우저에 다운로드를 요청했습니다",
+  "exp.outcomeOk": "{file} ({size}). 다운로드 폴더에 파일이 없으면 브라우저의 다운로드 목록에서 차단·취소 여부를 확인하고 '다시 받기'를 누르세요.",
+  "exp.outcomeErrorTitle": "내보내기 실패",
+  "exp.downloadHint": "누르면 브라우저 다운로드 폴더에 3MF가 저장됩니다. 큰 모델(수십만 면)은 만드는 데 수십 초 걸리며 그동안 상태 표시줄에 '3MF 만드는 중…'이 뜹니다. 파일이 안 보이면 상태 표시줄의 메시지와 브라우저의 다운로드 목록(차단 여부)을 확인하고, 옆의 '다시 받기'를 누르세요.",
   "help.export": "내보내기\n- PrusaSlicer 2.9.6 이상용 3MF. 칠하기 정보와 가상 익스트루더 정의(JSON)가 들어갑니다\n- 좌표/배율/목표 높이: Rodin 좌표를 그대로 두거나 mm로 맞춥니다. '베드에 놓기'와 '중앙 정렬'로 배치\n- 베드 크기는 템플릿에서 가져오거나 직접 입력\n- 템플릿 프린터 설정 포함: 기본 꺼짐. 켜면 템플릿의 Slic3r_PE.config를 그대로 넣습니다\n- 슬라이서·프린터 확인: 레시피는 익스트루더 번호만 담기므로 앱의 E1~E5, PrusaSlicer의 익스트루더 1~5, XL 툴 1~5의 필라멘트 순서가 같아야 합니다. 템플릿이 있으면 색을 비교해 경고합니다\n- 검증 목록이 모두 통과해야 파일이 만들어집니다\n- 노마드 왕복: 색 편집용 OBJ를 내보내고, Nomad Sculpt에서 칠한 OBJ를 다시 읽어 팔레트 색에 맞춥니다",
 };
 
@@ -716,6 +722,12 @@ const en: Record<Key, string> = {
   "exp.slicerCountDiffers": "Extruder count differs: app {app}, template {template}.",
   "exp.slicerAdopt": "Adopt template filaments",
   "status.templateFilamentsApplied": "Put the template's {n} filaments (colour and name) into the slots and the list from E1.",
+  "exp.downloadAgain": "Download again: {file} ({size})",
+  "exp.downloadAgainHint": "Sends the last built 3MF to the browser download again. Use it when the automatic download was blocked.",
+  "exp.outcomeOkTitle": "3MF built and handed to the browser download",
+  "exp.outcomeOk": "{file} ({size}). If the file is not in the download folder, check the browser's download list for a blocked or cancelled entry and press 'Download again'.",
+  "exp.outcomeErrorTitle": "Export failed",
+  "exp.downloadHint": "The 3MF goes to the browser's download folder. Large models (hundreds of thousands of faces) take tens of seconds to build; the status bar shows 'Building 3MF…' meanwhile. If no file appears, check the status bar message and the browser's download list (blocked?), then press 'Download again'.",
   "help.export": "Export\n- A 3MF for PrusaSlicer 2.9.6 or newer with the painting data and the virtual extruder definitions (JSON)\n- Coordinates / scale / target height: keep Rodin coordinates or fit to mm. 'Put on bed' and 'Centre on bed' place the model\n- Bed size comes from the template or is typed in\n- Include template printer config: off by default. On, the template's Slic3r_PE.config is copied in\n- Slicer · printer check: recipes carry extruder numbers only, so the app's E1–E5, PrusaSlicer's extruders 1–5 and the XL tools 1–5 must hold the same filaments in the same order. With a template loaded the colours are compared and mismatches flagged\n- The file is only written when every check in the list passes\n- Nomad round trip: export an OBJ for colour editing and re-import the OBJ painted in Nomad Sculpt, snapped to the palette colours",
 };
 

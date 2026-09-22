@@ -14,7 +14,7 @@ export function downloadText(filename: string, text: string, mime = 'text/plain;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 export function downloadBlob(filename: string, blob: Blob): void {
@@ -25,5 +25,6 @@ export function downloadBlob(filename: string, blob: Blob): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Revoking immediately can cancel the download (Safari, Firefox, large blobs in Chrome).
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
